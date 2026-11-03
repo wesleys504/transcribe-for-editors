@@ -1,6 +1,6 @@
 #!/bin/bash
 # Transcribe installer. Safe to run again to update or repair.
-# Copyright (c) 2026 TBD Media Post. All rights reserved.
+# Copyright (c) 2026 TBD Media Post. Licensed under PolyForm Noncommercial 1.0.0 (see LICENSE.md).
 set -e
 cd "$(dirname "$0")"
 SRC="$(pwd)"
@@ -99,7 +99,7 @@ cat > "$APP/Contents/Info.plist" <<PL
   <key>CFBundleIdentifier</key><string>local.transcribe.app</string>
   <key>CFBundleVersion</key><string>2.1</string>
   <key>CFBundleShortVersionString</key><string>2.1</string>
-  <key>NSHumanReadableCopyright</key><string>© 2026 TBD Media Post. All rights reserved.</string>
+  <key>NSHumanReadableCopyright</key><string>© 2026 TBD Media Post. Free for personal, noncommercial use.</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>Transcribe</string>
   <key>CFBundleIconFile</key><string>Transcribe</string>

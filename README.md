@@ -45,6 +45,8 @@ The **Activity** tab shows what happened. The full log is in `Transcribe/transcr
 
 Turn off the watch folder, then delete `Transcribe` from your home folder and from Applications.
 
----
+## License
 
-© 2026 TBD Media Post. All rights reserved.
+© 2026 TBD Media Post. Free for personal and other noncommercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE.md).
+
+Using Transcribe on paid or commercial work, or building it into a product, needs permission. Get in touch through GitHub.
