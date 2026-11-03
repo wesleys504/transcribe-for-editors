@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Transcribe</title>
+<!-- Transcribe, (c) 2026 TBD Media Post. All rights reserved. -->
+<style>
+  :root {
+    --bg: #1f2229;
+    --panel: #282c35;
+    --raised: #313641;
+    --line: #3b414e;
+    --text: #e9e7e2;
+    --muted: #959aa6;
+    --caption: #f2d45c;   /* subtitle yellow: the one accent */
+    --ok: #63c49a;
+    --bad: #ec6d62;
+    --frame: #0d0f12;
+    --btn: #f2d45c;
+    --radius-s: 6px;
+    --radius-l: 12px;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #eef0f3; --panel: #ffffff; --raised: #f5f6f8; --line: #d9dde3;
+      --text: #1d2026; --muted: #69707c; --caption: #b88a00; --ok: #23875c; --bad: #c8453a; --frame: #15171b;
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+  .tc { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  button { white-space: nowrap; font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--raised);
+    border-radius: var(--radius-s); padding: 6px 12px; }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--caption); outline-offset: 1px; }
+  button.primary { background: var(--btn); color: #1a1600; border-color: transparent; font-weight: 600; }
+  button.quiet { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 8px; }
+  button.quiet:hover { color: var(--text); }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--radius-s); padding: 7px 9px; width: 100%; }
+  textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+
+  .app { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
+  .credit { color: var(--muted); font-size: 11px; padding: 8px 22px 12px; opacity: .8; }
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 22px 10px; }
+  header h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  header .spacer { flex: 1; }
+  .watch { display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 10px; border-radius: 99px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .watch.on .dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+
+  /* drop zone */
+  .drop { margin: 4px 22px 14px; border: 1.5px dashed var(--line); border-radius: var(--radius-l);
+    display: flex; align-items: center; gap: 18px; padding: 18px 22px; transition: border-color .15s, background .15s; }
+  .drop.big { flex-direction: column; justify-content: center; padding: 64px 22px; text-align: center; }
+  .drop.hover { border-color: var(--caption); background: color-mix(in srgb, var(--caption) 7%, transparent); }
+  .drop .say { flex: 1; }
+  .drop .say strong { display: block; font-size: 14px; font-weight: 600; }
+  .drop.big .say strong { font-size: 20px; letter-spacing: -0.015em; margin-bottom: 6px; }
+  .drop .say span { color: var(--muted); }
+  .drop .buttons { display: flex; gap: 8px; }
+
+  /* tabs + list */
+  .body { overflow: auto; padding: 0 22px 24px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .tabs button { border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--caption); }
+  .tabs .right { margin-left: auto; }
+
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 200px 340px; align-items: center; gap: 18px;
+    padding: 12px 4px; border-bottom: 1px solid var(--line); }
+  .row .name { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .where { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .status { font-size: 12px; color: var(--muted); }
+  .row .status.done { color: var(--ok); }
+  .row .status.failed { color: var(--bad); }
+  .bar { height: 4px; background: var(--raised); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; background: var(--caption); transition: width .4s; }
+  .row.running .bar i.indet { width: 30% !important; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  .row .actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .row .err { grid-column: 1 / -1; color: var(--bad); font-size: 12px; margin-top: -4px; }
+  .empty { color: var(--muted); padding: 28px 4px; }
+  .log { font-size: 12px; color: var(--muted); white-space: pre-wrap; padding: 10px 4px; }
+
+  /* sheets */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; }
+  .scrim.open { display: block; }
+  .sheet { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 92vw); background: var(--panel);
+    border-left: 1px solid var(--line); padding: 20px 22px; overflow: auto; transform: translateX(100%); transition: transform .2s ease; }
+  .sheet.open { transform: none; }
+  .sheet h2, .modal h2 { font-size: 16px; margin: 0 0 14px; font-weight: 650; letter-spacing: -0.01em; }
+  .field { margin-bottom: 18px; }
+  .field > label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 5px; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .switch input { width: auto; }
+  .keyrow { display: flex; gap: 8px; }
+  .keyrow input { flex: 1; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+
+  /* speaker naming: quotes shown as on-screen subtitles */
+  .modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -48%); width: min(760px, 94vw); max-height: 88vh; overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 22px 22px 0; display: none; }
+  .modal.open { display: block; }
+  .modal .sub { color: var(--muted); margin: -8px 0 16px; }
+  .spk { display: grid; grid-template-columns: 1fr 220px; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .frame { background: var(--frame); border-radius: var(--radius-s); padding: 14px 14px 10px; }
+  .frame .who { color: #9aa0ab; font-size: 12px; margin-bottom: 8px; }
+  .cue { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+  .cue .play { flex: none; width: 28px; height: 28px; border-radius: 50%; padding: 0; border: 1px solid #3a3f49; background: #1b1e24; color: #e9e7e2; }
+  .cue .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .cue .line { flex: 1; text-align: center; }
+  .cue .line span { background: rgba(0,0,0,.75); color: #fff; padding: 1px 6px; line-height: 1.75;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone; font-size: 14px; font-weight: 500; }
+  .cue .t { color: #7c828e; font-size: 11px; display: block; text-align: center; margin-top: 2px; }
+  .spk .namebox label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .modal .foot { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 8px; margin: 8px -22px 0; padding: 14px 22px; background: var(--panel); border-top: 1px solid var(--line); }
+  .spend { color: var(--muted); font-size: 12px; background: none; border: none; padding: 4px 6px; }
+  .spend:hover { color: var(--text); }
+  .row .cost { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .more { position: relative; }
+  .menu { position: absolute; right: 0; top: calc(100% + 4px); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-s);
+    padding: 4px; min-width: 170px; z-index: 5; display: none; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .menu.open { display: block; }
+  .menu button { display: block; width: 100%; text-align: left; border: none; background: none; padding: 7px 10px; }
+  .menu button:hover { background: var(--raised); }
+  .modal.narrow { width: min(460px, 94vw); }
+  .langs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 6px 0 4px; }
+  .langs label { display: flex; gap: 8px; align-items: center; }
+  .langs input { width: auto; }
+  .sum-text { font-size: 14px; line-height: 1.6; max-width: 68ch; margin: 0 0 14px; }
+  .topics { color: var(--muted); margin: 0 0 18px; }
+  .topics strong { color: var(--text); font-weight: 600; }
+  .bites { list-style: none; padding: 0; margin: 0; }
+  .bite { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .bite .meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .bite .meta b { color: var(--text); font-weight: 600; }
+  .bite q { font-size: 14px; line-height: 1.55; quotes: "\201C" "\201D"; }
+  .bite .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .bite .play { width: 28px; height: 28px; border-radius: 50%; padding: 0; }
+  .bite .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: var(--radius-s); display: none; }
+  .toast.show { display: block; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  @media (max-width: 720px) { .row { grid-template-columns: 1fr; } .row .actions { justify-content: flex-start; } .spk { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Transcribe</h1>
+    <div class="spacer"></div>
+    <button class="spend" id="spendBtn" title="Estimated Claude cost. Your exact bill is on console.anthropic.com."></button>
+    <button class="watch" id="watchBtn" title="Transcribe anything put in the watch folder, even when this window is closed"><span class="dot"></span><span id="watchText">Watch folder off</span></button>
+    <button id="settingsBtn">Settings</button>
+  </header>
+
+  <div class="drop big" id="drop">
+    <div class="say">
+      <strong>Drop clips or folders here</strong>
+      <span id="dropHint">You'll get captions (.srt) and a timecoded transcript next to each clip.</span>
+    </div>
+    <div class="buttons">
+      <button class="primary" id="addFiles">Add clips…</button>
+      <button id="addFolder">Add folder…</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="tabs" role="tablist">
+      <button class="on" data-tab="queue">Queue</button>
+      <button data-tab="recent">Recent</button>
+      <button data-tab="log">Activity</button>
+      <button class="quiet right" id="clearBtn">Clear finished</button>
+    </div>
+    <div id="queue"></div>
+    <div id="recent" hidden></div>
+    <div id="log" class="log" hidden></div>
+  </div>
+  <footer class="credit">Transcribe 2.1. &copy; 2026 TBD Media Post. All rights reserved.</footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<aside class="sheet" id="settings" aria-label="Settings">
+  <h2>Settings</h2>
+
+  <div class="field">
+    <label for="key">Claude API key</label>
+    <div class="keyrow"><input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" /><button id="saveKey">Save</button></div>
+    <div class="hint" id="keyState"></div>
+  </div>
+
+  <div class="field switch">
+    <div><label for="cleanup">Fix names and terms with Claude</label><div class="hint">Uses your names list. Leaves how people talk alone.</div></div>
+    <input id="cleanup" type="checkbox" />
+  </div>
+
+  <div class="field switch">
+    <div><label for="summary">Write a summary with soundbites</label><div class="hint">A few sentences, the topics, and the best 5–10 bites with timecodes.</div></div>
+    <input id="summary" type="checkbox" />
+  </div>
+
+  <div class="field">
+    <label for="translate">Also translate to</label>
+    <select id="translate">
+      <option value="">Don't translate</option>
+      <option>English</option><option>Spanish</option><option>Catalan</option><option>French</option><option>Italian</option>
+      <option>German</option><option>Portuguese</option><option>Dutch</option><option>Japanese</option><option>Chinese</option><option>Korean</option>
+    </select>
+    <div class="hint">Adds translated captions with the same timings, plus a translated transcript. Needs the API key.</div>
+  </div>
+
+  <div class="field">
+    <label for="speakers">People talking</label>
+    <select id="speakers">
+      <option value="auto">Detect automatically</option>
+      <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+    </select>
+    <div class="hint">If you know the number, speaker labels get more accurate.</div>
+  </div>
+
+  <div class="field switch">
+    <div><label for="ask">Ask me to name speakers</label><div class="hint">Opens the naming window when a clip finishes.</div></div>
+    <input id="ask" type="checkbox" />
+  </div>
+
+  <div class="field">
+    <label for="language">Spoken language</label>
+    <select id="language">
+      <option value="auto">Detect automatically</option>
+      <option value="en">English</option><option value="es">Spanish</option><option value="ca">Catalan</option><option value="fr">French</option>
+      <option value="it">Italian</option><option value="de">German</option><option value="pt">Portuguese</option><option value="ja">Japanese</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="names">Names and terms</label>
+    <textarea id="names" placeholder="Oriol Castro&#10;Disfrutar&#10;Eduard Xatruch"></textarea>
+    <div class="hint">One per line. Whisper listens for these and Claude fixes their spelling. For one project only, put a names.txt file in that project's footage folder.</div>
+  </div>
+
+  <div class="field">
+    <label for="lineLen">Caption line length</label>
+    <select id="lineLen">
+      <option value="42">42 characters (broadcast)</option>
+      <option value="32">32 characters (social, vertical)</option>
+      <option value="37">37 characters</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="claudeModel">Claude model</label>
+    <select id="claudeModel">
+      <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recommended)</option>
+      <option value="claude-haiku-5-5">Claude Haiku 5.5 (about 20 times cheaper, a little less careful)</option>
+      <option value="claude-opus-5-5">Claude Opus 5.5 (most capable, about twice the cost)</option>
+    </select>
+    <div class="hint">Used for name fixes, summaries and translation. Transcription itself always runs on your Mac.</div>
+  </div>
+
+  <div class="field">
+    <label>Claude spending</label>
+    <div id="spendDetail" class="hint"></div>
+  </div>
+
+  <div class="field">
+    <label for="model">Whisper model</label>
+    <select id="model">
+      <option value="large-v3-turbo">Large v3 Turbo (recommended)</option>
+      <option value="large-v3">Large v3 (slower, a little more accurate)</option>
+      <option value="medium">Medium (faster)</option>
+    </select>
+    <div class="hint" id="engineHint"></div>
+  </div>
+
+  <div class="field">
+    <label>About</label>
+    <div class="hint">Transcribe 2.1<br>&copy; 2026 TBD Media Post. All rights reserved.<br>Transcription by Whisper, run on this Mac. Cleanup, summaries and translation by Claude.</div>
+  </div>
+</aside>
+
+<div class="modal" id="namer" role="dialog" aria-modal="true" aria-labelledby="namerTitle">
+  <h2 id="namerTitle">Who's talking?</h2>
+  <p class="sub" id="namerSub"></p>
+  <div id="namerList"></div>
+  <datalist id="usedNames"></datalist>
+  <div class="foot">
+    <button class="quiet" id="namerSkip">Skip</button>
+    <button class="primary" id="namerSave">Save names</button>
+  </div>
+</div>
+
+<div class="modal narrow" id="trModal" role="dialog" aria-modal="true" aria-labelledby="trTitle">
+  <h2 id="trTitle">Translate</h2>
+  <p class="sub" id="trSub"></p>
+  <div class="langs" id="trLangs"></div>
+  <div class="field" style="margin-top:10px"><input id="trOther" placeholder="Another language (type it)" /></div>
+  <div class="foot">
+    <button class="quiet" id="trCancel">Cancel</button>
+    <button class="primary" id="trGo">Translate</button>
+  </div>
+</div>
+
+<div class="modal" id="sumModal" role="dialog" aria-modal="true" aria-labelledby="sumTitle">
+  <h2 id="sumTitle">Summary</h2>
+  <p class="sub" id="sumSub"></p>
+  <p class="sum-text" id="sumText"></p>
+  <p class="topics" id="sumTopics"></p>
+  <ul class="bites" id="sumBites"></ul>
+  <div class="foot">
+    <button class="quiet" id="sumCopy">Copy soundbites</button>
+    <button id="sumDoc">Open summary doc</button>
+    <button class="primary" id="sumClose">Done</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<audio id="player"></audio>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const api = async (path, body) => {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
+  return j;
+};
+const base = (p) => p.split("/").pop();
+let S = null, tab = "queue", settingsLoaded = false, namerQueue = [], namerOpenFor = null, prompted = new Set();
+
+function toast(msg, ms = 2600) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+// ---------------- rendering
+const money = (v) => v >= 0.995 ? `$${v.toFixed(2)}` : v >= 0.01 ? `$${v.toFixed(2)}` : v > 0 ? "under 1¢" : "$0.00";
+function statusText(j) {
+  if (j.status === "queued") return "Waiting";
+  if (j.status === "running") return j.stage + "…";
+  if (j.status === "done" && j.kind) return j.stage;
+  if (j.status === "done") return j.speakers > 1 ? `Done, ${j.speakers} speakers` : "Done";
+  if (j.status === "failed") return j.kind === "translate" ? "Couldn't translate" : j.kind === "summarize" ? "Couldn't summarize" : "Couldn't transcribe";
+  return j.stage;
+}
+// main actions for a finished clip, plus a "More" menu
+function clipActions({ path, outputs, speakers, named, hasSummary }) {
+  const docx = outputs.find((o) => o.endsWith(" - transcript.docx"));
+  let h = hasSummary ? `<button data-summary="${esc(path)}">Summary</button>` : "";
+  if (speakers > 0) h += `<button data-name="${esc(path)}">${named ? "Rename speakers" : "Name speakers"}</button>`;
+  if (docx) h += `<button data-open="${esc(docx)}">Open transcript</button>`;
+  h += `<span class="more"><button class="quiet" data-more aria-label="More actions">More</button><span class="menu">
+      <button data-translate="${esc(path)}">Translate…</button>
+      <button data-summarize="${esc(path)}">${hasSummary ? "Rewrite summary" : "Write summary"}</button>
+      <button data-reveal="${esc(outputs[0] || path)}">Show in Finder</button></span></span>`;
+  return h;
+}
+function renderQueue() {
+  const el = $("#queue");
+  if (el.querySelector(".menu.open")) return;
+  const jobs = S.jobs;
+  $("#drop").classList.toggle("big", jobs.length === 0 && tab === "queue");
+  if (!jobs.length) { el.innerHTML = `<div class="empty">Nothing in the queue. Drop clips above to start.</div>`; return; }
+  el.innerHTML = jobs.map((j) => {
+    const pct = Math.round((j.frac || 0) * 100);
+    const indet = j.status === "running" && j.stage === "Transcribing" && S.engine === "mlx";
+    return `<div class="row ${j.status}">
+      <div><div class="name" title="${esc(j.path)}">${esc(j.name)}</div><div class="where">${esc(j.folder)}</div></div>
+      <div><div class="status ${j.status}">${esc(statusText(j))}</div>
+        ${j.status === "running" || j.status === "queued" ? `<div class="bar"><i class="${indet ? "indet" : ""}" style="width:${pct}%"></i></div>` : ""}
+        ${j.status === "done" && j.cost ? `<div class="cost">Claude: ${money(j.cost)}</div>` : ""}</div>
+      <div class="actions">
+        ${j.status === "done" && j.kind === "translate" ? `${j.outputs[0] ? `<button data-open="${esc(j.outputs[0])}">Open translation</button>` : ""}<button class="quiet" data-reveal="${esc(j.outputs[0] || j.path)}">Show in Finder</button>` : ""}
+        ${j.status === "done" && j.kind === "summarize" ? `<button data-summary="${esc(j.path)}">Summary</button>` : ""}
+        ${j.status === "done" && !j.kind ? clipActions({ path: j.path, outputs: j.outputs, speakers: j.speakers, named: j.named, hasSummary: j.has_summary }) : ""}
+        ${j.status === "failed" ? `<button data-retry="${esc(j.id)}">Try again</button>` : ""}
+      </div>
+      ${j.status === "failed" && j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+async function renderRecent() {
+  const { items } = await api("/api/recent");
+  const el = $("#recent");
+  if (!items.length) { el.innerHTML = `<div class="empty">Clips you transcribe show up here, so you can open or rename them later.</div>`; return; }
+  el.innerHTML = items.map((r) => `<div class="row done">
+      <div><div class="name" title="${esc(r.path)}">${esc(r.name)}</div><div class="where">${esc(r.labels.filter((l) => !/^Speaker \d+$/.test(l)).join(", ") || (r.speakers > 1 ? r.speakers + " speakers, not named yet" : ""))}</div></div>
+      <div><div class="status">${new Date(r.when * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+        <div class="cost">${r.translations.length ? "Translated: " + esc(r.translations.join(", ")) + ". " : ""}${r.cost ? "Claude: " + money(r.cost) : ""}</div></div>
+      <div class="actions">${r.exists ? clipActions({ path: r.path, outputs: r.outputs, speakers: r.speakers, named: r.labels.some((l) => !/^Speaker \d+$/.test(l)), hasSummary: r.has_summary }) : `<span class="status">Clip moved or deleted</span>`}</div>
+    </div>`).join("");
+}
+function renderLog() { $("#log").textContent = S.log.join("\n") || "No activity yet."; }
+function renderSpend() {
+  const m = S.usage.this_month;
+  $("#spendBtn").textContent = `Claude this month: ${money(m.usd)}`;
+  $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`;
+}
+function renderHeader() {
+  renderSpend();
+  $("#watchBtn").classList.toggle("on", S.watch);
+  $("#watchText").textContent = S.watch ? "Watch folder on" : "Watch folder off";
+  $("#watchBtn").title = S.watch ? `Watching ${S.watchDir}. Click to turn off.` : "Transcribe anything put in the watch folder, even when this window is closed";
+}
+function loadSettingsForm() {
+  const s = S.settings;
+  $("#cleanup").checked = !!s.claude_cleanup;
+  $("#summary").checked = s.summary !== false;
+  $("#ask").checked = s.ask_speaker_names !== false;
+  $("#translate").value = s.translate_to || "";
+  $("#speakers").value = String(s.speakers || "auto");
+  $("#language").value = s.language || "auto";
+  $("#lineLen").value = String(s.max_chars_per_line || 42);
+  $("#model").value = s.model || "large-v3-turbo";
+  $("#claudeModel").value = s.claude_model || "claude-sonnet-5-5";
+  $("#names").value = S.names;
+  $("#engineHint").textContent = S.engine === "mlx" ? "Runs on your Mac's GPU (Apple Silicon)." : "Runs on your Mac's processor.";
+  renderKeyState();
+  settingsLoaded = true;
+}
+function renderKeyState() {
+  $("#keyState").innerHTML = S.hasKey ? `<span class="ok">Key saved in your Keychain.</span> <button class="quiet" id="removeKey">Remove</button>` : "No key saved. Transcription still works; name fixes and translation need a key.";
+  const rm = $("#removeKey"); if (rm) rm.onclick = async () => { await api("/api/key/delete", {}); await refresh(); renderKeyState(); toast("Key removed"); };
+}
+
+async function refresh() {
+  S = await api("/api/state");
+  renderHeader();
+  if (tab === "queue") renderQueue();
+  if (tab === "log") renderLog();
+  if (!settingsLoaded) loadSettingsForm();
+  // offer naming for newly finished multi-speaker clips
+  if (S.settings.ask_speaker_names !== false) {
+    for (const j of S.jobs) {
+      if (j.status === "done" && j.speakers > 1 && !j.named && !prompted.has(j.id)) { prompted.add(j.id); namerQueue.push(j.path); }
+    }
+    if (!namerOpenFor && namerQueue.length && !document.querySelector(".modal.open")) openNamer(namerQueue.shift());
+  }
+}
+
+// ---------------- speaker naming
+async function openNamer(path) {
+  let v;
+  try { v = await api("/api/speakers?path=" + encodeURIComponent(path)); } catch (e) { toast(e.message); return; }
+  namerOpenFor = path;
+  $("#namerSub").textContent = `${v.name}. Listen to a line, then type who it is. Give two labels the same name to merge them.`;
+  $("#usedNames").innerHTML = v.used.map((n) => `<option value="${esc(n)}">`).join("");
+  $("#namerList").innerHTML = v.speakers.map((s) => `<div class="spk">
+      <div class="frame">
+        <div class="who">${esc(s.label)}, ${s.words} words</div>
+        ${s.samples.map((c) => `<div class="cue">
+          <button class="play" aria-label="Play this line" data-start="${c.start}" data-end="${c.end}">▶</button>
+          <div class="line"><span>${esc(c.text)}</span><div class="t tc">${esc(c.tc)}</div></div>
+        </div>`).join("")}
+      </div>
+      <div class="namebox">
+        <label for="spk${s.num}">Name</label>
+        <input id="spk${s.num}" data-num="${s.num}" list="usedNames" placeholder="${esc(s.label)}" value="${/^Speaker \d+$/.test(s.label) ? "" : esc(s.label)}" />
+      </div>
+    </div>`).join("");
+  $("#namer").classList.add("open"); $("#scrim").classList.add("open");
+  const first = $("#namerList input"); if (first) first.focus();
+}
+function closeNamer() {
+  $("#namer").classList.remove("open"); if (!$("#settings").classList.contains("open")) $("#scrim").classList.remove("open");
+  $("#player").pause(); namerOpenFor = null;
+  setTimeout(() => { if (namerQueue.length) openNamer(namerQueue.shift()); }, 250);
+}
+$("#namerList").addEventListener("click", (e) => {
+  const b = e.target.closest(".play"); if (!b) return;
+  const p = $("#player");
+  document.querySelectorAll(".play.on").forEach((x) => { x.classList.remove("on"); x.textContent = "▶"; });
+  if (p.dataset.src === b.dataset.start && !p.paused) { p.pause(); return; }
+  p.src = `/api/snippet?path=${encodeURIComponent(namerOpenFor)}&start=${b.dataset.start}&end=${b.dataset.end}`;
+  p.dataset.src = b.dataset.start; p.play().catch(() => toast("Couldn't play that line"));
+  b.classList.add("on"); b.textContent = "■";
+  p.onended = () => { b.classList.remove("on"); b.textContent = "▶"; };
+});
+$("#namerSave").onclick = async () => {
+  const labels = {};
+  document.querySelectorAll("#namerList input").forEach((i) => { if (i.value.trim()) labels[i.dataset.num] = i.value.trim(); });
+  try { await api("/api/speakers", { path: namerOpenFor, labels }); toast("Names saved to the transcript"); } catch (e) { toast(e.message); return; }
+  closeNamer(); refresh(); if (tab === "recent") renderRecent();
+};
+$("#namerSkip").onclick = closeNamer;
+
+// ---------------- actions
+document.addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  try {
+    if (t.dataset.open) await api("/api/open", { path: t.dataset.open });
+    else if (t.dataset.reveal) await api("/api/open", { path: t.dataset.reveal, reveal: true });
+    else if (t.dataset.name) openNamer(t.dataset.name);
+    else if (t.dataset.more !== undefined) { const m = t.nextElementSibling; const was = m.classList.contains("open"); closeMenus(); if (!was) m.classList.add("open"); return; }
+    else if (t.dataset.translate) { closeMenus(); openTranslate(t.dataset.translate); }
+    else if (t.dataset.summarize) { closeMenus(); await api("/api/summarize", { paths: [t.dataset.summarize] }); toast("Claude is writing the summary"); showQueue(); }
+    else if (t.dataset.summary) openSummary(t.dataset.summary);
+    else if (t.dataset.retry) { await api("/api/retry", { id: t.dataset.retry }); refresh(); }
+    else if (t.dataset.tab) {
+      tab = t.dataset.tab;
+      document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.classList.toggle("on", b === t));
+      ["queue", "recent", "log"].forEach((id) => ($("#" + id).hidden = id !== tab));
+      if (tab === "recent") renderRecent(); else refresh();
+    }
+    closeMenus();
+  } catch (err) { toast(err.message, 4000); }
+});
+function closeMenus() { document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open")); }
+function showQueue() { const b = $('.tabs [data-tab="queue"]'); if (tab !== "queue") b.click(); else refresh(); }
+
+// ---------------- translate an existing clip
+const LANGS = ["English", "Spanish", "Catalan", "French", "Italian", "German", "Portuguese", "Japanese"];
+let trPath = null;
+function openTranslate(path) {
+  trPath = path;
+  $("#trSub").textContent = `${base(path)}. You get translated captions with the same timings, plus a translated transcript.`;
+  $("#trLangs").innerHTML = LANGS.map((l) => `<label><input type="checkbox" value="${l}" /> ${l}</label>`).join("");
+  $("#trOther").value = "";
+  $("#trModal").classList.add("open"); $("#scrim").classList.add("open");
+}
+function closeModal(id) { $(id).classList.remove("open"); if (!document.querySelector(".modal.open") && !$("#settings").classList.contains("open")) $("#scrim").classList.remove("open"); }
+$("#trCancel").onclick = () => closeModal("#trModal");
+$("#trGo").onclick = async () => {
+  const langs = [...document.querySelectorAll("#trLangs input:checked")].map((i) => i.value);
+  if ($("#trOther").value.trim()) langs.push($("#trOther").value.trim());
+  if (!langs.length) { toast("Pick at least one language"); return; }
+  try { await api("/api/translate", { paths: [trPath], langs }); closeModal("#trModal"); toast(`Translating to ${langs.join(", ")}`); showQueue(); }
+  catch (e) { toast(e.message, 4000); }
+};
+
+// ---------------- summary
+let sumPath = null, sumDoc = "";
+async function openSummary(path) {
+  let v;
+  try { v = await api("/api/summary?path=" + encodeURIComponent(path)); } catch (e) { toast(e.message); return; }
+  sumPath = v.media; sumDoc = v.doc;
+  $("#sumTitle").textContent = v.name;
+  $("#sumSub").textContent = "Summary and soundbites by Claude";
+  $("#sumText").textContent = v.summary;
+  $("#sumTopics").innerHTML = v.topics.length ? `<strong>Topics:</strong> ${esc(v.topics.join(", "))}` : "";
+  $("#sumBites").innerHTML = v.soundbites.map((b) => `<li class="bite">
+      <button class="play" aria-label="Play this soundbite" data-start="${b.start}" data-end="${b.end}">▶</button>
+      <div><div class="meta"><span class="tc">${esc(b.tc)}–${esc(b.tc_out)}</span>${b.who && !/^Speaker \d+$/.test(b.who) ? `, <b>${esc(b.who)}</b>` : b.who ? `, ${esc(b.who)}` : ""}</div>
+        <q>${esc(b.quote)}</q><div class="why">${esc(b.why)}</div></div></li>`).join("") || `<li class="empty">No soundbites in this one.</li>`;
+  $("#sumDoc").hidden = !sumDoc;
+  $("#sumBites")._bites = v.soundbites;
+  $("#sumModal").classList.add("open"); $("#scrim").classList.add("open");
+}
+$("#sumBites").addEventListener("click", (e) => {
+  const b = e.target.closest(".play"); if (!b) return;
+  const p = $("#player");
+  const was = b.classList.contains("on");
+  document.querySelectorAll(".play.on").forEach((x) => { x.classList.remove("on"); x.textContent = "▶"; });
+  p.pause(); if (was) return;
+  p.src = `/api/snippet?path=${encodeURIComponent(sumPath)}&start=${b.dataset.start}&end=${b.dataset.end}`;
+  p.play().catch(() => toast("Couldn't play that soundbite"));
+  b.classList.add("on"); b.textContent = "■";
+  p.onended = () => { b.classList.remove("on"); b.textContent = "▶"; };
+});
+$("#sumClose").onclick = () => { $("#player").pause(); closeModal("#sumModal"); };
+$("#sumDoc").onclick = () => sumDoc && api("/api/open", { path: sumDoc });
+$("#sumCopy").onclick = async () => {
+  const bites = $("#sumBites")._bites || [];
+  const text = bites.map((b) => `${b.tc} - ${b.tc_out}  ${b.who ? b.who + ": " : ""}"${b.quote}"  (${b.why})`).join("\n");
+  try { await navigator.clipboard.writeText(text); toast("Soundbites copied"); } catch (e) { toast("Couldn't copy. Open the summary doc instead."); }
+};
+const add = async (kind) => {
+  try { const r = await api("/api/pick", { kind }); if (r.found && !r.added) toast("Those clips are already in the queue"); else if (!r.found && r.found !== undefined) toast("No audio or video files there"); refresh(); }
+  catch (e) { toast(e.message); }
+};
+$("#addFiles").onclick = () => add("files");
+$("#addFolder").onclick = () => add("folder");
+$("#clearBtn").onclick = async () => { await api("/api/clear", {}); refresh(); };
+$("#watchBtn").onclick = async () => {
+  const r = await api("/api/watch", { on: !S.watch });
+  toast(r.watch ? `Watching ${S.watchDir}` : "Watch folder is off");
+  refresh();
+};
+
+// drag highlight (the app itself receives the files)
+let dragDepth = 0;
+window.addEventListener("dragenter", () => { dragDepth++; $("#drop").classList.add("hover"); });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("#drop").classList.remove("hover"); } });
+window.addEventListener("drop", () => { dragDepth = 0; $("#drop").classList.remove("hover"); setTimeout(refresh, 400); });
+window.addEventListener("dragover", (e) => e.preventDefault());
+
+// settings sheet
+const openSettings = (on) => {
+  $("#settings").classList.toggle("open", on);
+  $("#scrim").classList.toggle("open", on || $("#namer").classList.contains("open"));
+};
+$("#settingsBtn").onclick = () => openSettings(true);
+$("#scrim").onclick = () => {
+  if ($("#namer").classList.contains("open")) closeNamer();
+  closeModal("#trModal"); $("#player").pause(); closeModal("#sumModal"); openSettings(false);
+};
+document.addEventListener("click", (e) => { if (!e.target.closest(".more")) closeMenus(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if ($("#namer").classList.contains("open")) closeNamer();
+  else if ($("#trModal").classList.contains("open")) closeModal("#trModal");
+  else if ($("#sumModal").classList.contains("open")) { $("#player").pause(); closeModal("#sumModal"); }
+  else openSettings(false);
+});
+const saveSetting = async (k, v, msg) => { await api("/api/settings", { [k]: v }); S.settings[k] = v; toast(msg || "Saved"); };
+$("#cleanup").onchange = (e) => saveSetting("claude_cleanup", e.target.checked, e.target.checked ? "Claude will fix names and terms" : "Claude cleanup off");
+$("#ask").onchange = (e) => saveSetting("ask_speaker_names", e.target.checked);
+$("#summary").onchange = (e) => saveSetting("summary", e.target.checked, e.target.checked ? "New clips get a summary and soundbites" : "Summaries off");
+$("#spendBtn").onclick = () => openSettings(true);
+$("#translate").onchange = (e) => saveSetting("translate_to", e.target.value, e.target.value ? `New clips will also be translated to ${e.target.value}` : "Translation off");
+$("#speakers").onchange = (e) => saveSetting("speakers", e.target.value);
+$("#language").onchange = (e) => saveSetting("language", e.target.value);
+$("#lineLen").onchange = (e) => saveSetting("max_chars_per_line", Number(e.target.value));
+$("#claudeModel").onchange = (e) => saveSetting("claude_model", e.target.value, `Claude model: ${e.target.selectedOptions[0].textContent.split(" (")[0]}`);
+$("#model").onchange = (e) => saveSetting("model", e.target.value, "Saved. A new model downloads the first time it's used.");
+let namesTimer;
+$("#names").oninput = () => { clearTimeout(namesTimer); namesTimer = setTimeout(async () => { await api("/api/names", { text: $("#names").value }); toast("Names saved"); }, 700); };
+$("#saveKey").onclick = async () => {
+  try { await api("/api/key", { key: $("#key").value.trim() }); $("#key").value = ""; await refresh(); renderKeyState(); toast("Key saved to your Keychain"); }
+  catch (e) { toast(e.message, 4000); }
+};
+
+refresh();
+setInterval(() => { if (tab !== "recent") refresh().catch(() => {}); }, 1000);
+</script>
+</body>
+</html>
