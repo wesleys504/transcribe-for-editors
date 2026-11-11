@@ -56,6 +56,7 @@
   /* drop zone */
   .drop { margin: 4px 22px 14px; border: 1.5px dashed var(--line); border-radius: var(--radius-l);
     display: flex; align-items: center; gap: 18px; padding: 18px 22px; transition: border-color .15s, background .15s; }
+  .drop[hidden] { display: none; }
   .drop.big { flex-direction: column; justify-content: center; padding: 64px 22px; text-align: center; }
   .drop.hover { border-color: var(--caption); background: color-mix(in srgb, var(--caption) 7%, transparent); }
   .drop .say { flex: 1; }
@@ -144,9 +145,119 @@
   .bite .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .bite .play { width: 28px; height: 28px; border-radius: 50%; padding: 0; }
   .bite .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .sheet h3 { font-size: 13px; font-weight: 650; margin: 26px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .sheet h3:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+  .choice { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; }
+  .choice input { width: auto; margin-top: 2px; }
+  .choice .hint { margin-top: 1px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; }
+  .seg button { flex: 1; border: none; border-radius: 0; background: transparent; padding: 7px 8px; color: var(--muted); }
+  .seg button.on { background: var(--raised); color: var(--text); font-weight: 600; }
+  .create-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+  .create-cols h4 { font-size: 12px; font-weight: 650; margin: 4px 0 2px; color: var(--muted); }
+  .clips { color: var(--muted); font-size: 12px; margin: -6px 0 14px; max-height: 3.2em; overflow: hidden; }
+  .warn { color: var(--bad); font-size: 12px; margin-top: 4px; }
+  .pathrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .pathrow .path { flex: 1; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meter { height: 4px; background: var(--raised); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+  .meter i { display: block; height: 100%; background: var(--btn); }
+  @media (max-width: 720px) { .create-cols { grid-template-columns: 1fr; } }
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line);
     padding: 8px 14px; border-radius: var(--radius-s); display: none; }
   .toast.show { display: block; }
+
+  /* ---------------- projects + script workspace */
+  .proj-new { display: flex; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+  .proj-new input { max-width: 340px; }
+  .ws [hidden] { display: none !important; }
+  .ws { position: fixed; inset: 0; background: var(--bg); display: none; grid-template-rows: auto 1fr; }
+  .ws.open { display: grid; }
+  .ws-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .ws-head input { font-size: 15px; font-weight: 650; border-color: transparent; background: transparent; max-width: 420px; padding: 4px 8px; }
+  .ws-head input:hover { border-color: var(--line); }
+  .ws-head .spacer { flex: 1; }
+  .ws-body { display: grid; grid-template-columns: 230px minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
+  .ws-side { border-right: 1px solid var(--line); overflow: auto; padding: 14px 14px 20px; }
+  .ws-side h4 { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 650; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted); margin: 16px 0 8px; }
+  .ws-side h4:first-child { margin-top: 0; }
+  .ws-item { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 7px 8px; border-radius: var(--radius-s); }
+  .ws-item:hover { background: var(--raised); border-color: transparent; }
+  .ws-item.on { background: var(--raised); border-color: var(--line); }
+  .ws-item .t { display: block; font-weight: 550; overflow: hidden; text-overflow: ellipsis; }
+  .ws-item .k { display: block; color: var(--muted); font-size: 11px; }
+  .clip-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; padding: 6px 8px; border-radius: var(--radius-s); }
+  .clip-row:hover { background: var(--raised); }
+  .clip-row .t { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clip-row .k { color: var(--muted); font-size: 11px; grid-column: 1; }
+  .clip-row .k.wait { color: var(--caption); }
+  .clip-row button { grid-row: 1 / span 2; grid-column: 2; padding: 2px 6px; opacity: 0; }
+  .clip-row:hover button, .clip-row button:focus-visible { opacity: 1; }
+  .ws-side textarea { min-height: 90px; font-size: 12px; }
+  .ws-main { display: grid; grid-template-rows: auto 1fr auto auto; min-height: 0; min-width: 0; }
+  .ed-bar { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .ed-bar input { flex: 1; min-width: 110px; font-weight: 600; }
+  .ed-bar select { width: auto; max-width: 150px; }
+  #edBody { border: none; border-radius: 0; resize: none; min-height: 0; height: 100%; padding: 16px 20px; background: var(--bg);
+    font: 13px/1.75 "SF Mono", ui-monospace, Menlo, monospace; }
+  #edBody:focus-visible { outline: none; }
+  .ed-stats { display: flex; gap: 14px; padding: 7px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+  .ed-stats .spacer { flex: 1; }
+  .checks { max-height: 34vh; overflow: auto; border-top: 1px solid var(--line); padding: 4px 16px 10px; display: none; }
+  .checks.open { display: block; }
+  .checks .top { display: flex; align-items: center; gap: 10px; padding: 8px 0; position: sticky; top: 0; background: var(--bg); }
+  .checks .top strong { flex: 1; }
+  .chk { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .chk .ic { font-weight: 700; }
+  .chk.s-ok .ic { color: var(--ok); } .chk.s-tc .ic, .chk.s-close .ic { color: var(--caption); } .chk.s-missing .ic, .chk.s-clip .ic { color: var(--bad); }
+  .chk .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chk .n { color: var(--muted); font-size: 12px; }
+  .chk .play { width: 26px; height: 26px; border-radius: 50%; padding: 0; font-size: 11px; }
+  .chk .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .ws-empty { display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
+  .ws-empty .buttons { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .chat { border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--panel); }
+  .chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .chat-head strong { flex: 1; }
+  .chat-head .k { color: var(--muted); font-size: 11px; }
+  .msgs { overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 92%; padding: 9px 12px; border-radius: 12px; white-space: pre-wrap; line-height: 1.5; }
+  .msg.user { align-self: flex-end; background: var(--raised); border: 1px solid var(--line); border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg .meta { display: flex; gap: 10px; align-items: center; margin-top: 6px; color: var(--muted); font-size: 11px; white-space: normal; }
+  .msg .meta button { padding: 2px 8px; font-size: 11px; }
+  .msg.thinking { color: var(--muted); }
+  .msg.err { color: var(--bad); }
+  .starters { display: flex; flex-direction: column; gap: 6px; }
+  .starters p { color: var(--muted); margin: 0 0 4px; }
+  .starters button { text-align: left; white-space: normal; }
+  .chat-in { border-top: 1px solid var(--line); padding: 10px 12px 12px; }
+  .chat-in .sel { color: var(--caption); font-size: 11px; margin-bottom: 6px; display: none; }
+  .chat-in .sel.on { display: block; }
+  .chat-in textarea { min-height: 64px; max-height: 30vh; resize: none; }
+  .chat-in .row2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .chat-in .row2 .k { flex: 1; color: var(--muted); font-size: 11px; }
+  .pick-list { max-height: 50vh; overflow: auto; }
+  .pick-list label { display: flex; gap: 10px; align-items: center; padding: 8px 2px; border-top: 1px solid var(--line); }
+  .pick-list input { width: auto; }
+  .pick-list .k { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .voice-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius-s); }
+  .voice-row:hover { background: var(--raised); }
+  .voice-row .t { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .voice-row .k { color: var(--muted); font-size: 11px; grid-column: 1; }
+  .voice-row .k.cloned { color: var(--ok); }
+  .voice-row .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; }
+  .voice-row .acts button { padding: 2px 8px; font-size: 12px; }
+  .chk.s-synth .ic { color: var(--caption); }
+  .chk.s-synth .q { font-style: italic; }
+  .chk .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .chk .acts button { padding: 3px 9px; font-size: 12px; }
+  .synth-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #1a1600; background: var(--caption);
+    border-radius: 3px; padding: 0 5px; margin-right: 6px; font-style: normal; }
+  .consent { background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 12px 14px; margin: 12px 0; }
+  .logbox { white-space: pre-wrap; font: 12px/1.6 "SF Mono", ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--radius-s); padding: 10px 12px; max-height: 50vh; overflow: auto; }
+  @media (max-width: 980px) { .ws-body { grid-template-columns: 190px minmax(0, 1fr) 290px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
   @media (max-width: 720px) { .row { grid-template-columns: 1fr; } .row .actions { justify-content: flex-start; } .spk { grid-template-columns: 1fr; } }
 </style>
@@ -164,7 +275,7 @@
   <div class="drop big" id="drop">
     <div class="say">
       <strong>Drop clips or folders here</strong>
-      <span id="dropHint">You'll get captions (.srt) and a timecoded transcript next to each clip.</span>
+      <span id="dropHint">Then choose what to create (captions, transcripts, summaries, translations, clean audio) and where to save it.</span>
     </div>
     <div class="buttons">
       <button class="primary" id="addFiles">Add clips…</button>
@@ -176,47 +287,154 @@
     <div class="tabs" role="tablist">
       <button class="on" data-tab="queue">Queue</button>
       <button data-tab="recent">Recent</button>
+      <button data-tab="projects">Projects</button>
       <button data-tab="log">Activity</button>
       <button class="quiet right" id="clearBtn">Clear finished</button>
     </div>
     <div id="queue"></div>
     <div id="recent" hidden></div>
+    <div id="projects" hidden></div>
     <div id="log" class="log" hidden></div>
   </div>
-  <footer class="credit">Transcribe 2.1. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
+  <footer class="credit">Transcribe 3.2. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
 </div>
+
+
+<section class="ws" id="ws" aria-label="Project">
+  <div class="ws-head">
+    <button id="wsBack">← Projects</button>
+    <input id="wsName" aria-label="Project name" />
+    <div class="spacer"></div>
+    <button class="quiet" id="wsDelete">Delete project</button>
+  </div>
+  <div class="ws-body">
+    <nav class="ws-side">
+      <h4>Scripts <span class="more"><button class="quiet" data-more aria-label="New script">+ New</button><span class="menu" id="newScriptMenu"></span></span></h4>
+      <div id="wsScripts"></div>
+      <h4>Clips <span class="more"><button class="quiet" data-more aria-label="Add clips">+ Add</button><span class="menu">
+        <button id="wsFromRecent">From Recent…</button><button id="wsTranscribe">Transcribe new clips…</button></span></span></h4>
+      <div id="wsClips"></div>
+      <h4>Voices <span class="more"><button class="quiet" data-more aria-label="Voice options">•••</button><span class="menu">
+        <button id="wsVoiceLog">Generated-voice log…</button><button id="wsVoiceHelp">How cloned voices work</button></span></span></h4>
+      <div id="wsVoices"></div>
+      <h4>Notes for the assistant</h4>
+      <textarea id="wsNotes" placeholder="Audience, tone, length, names to spell right. The assistant reads this every time."></textarea>
+    </nav>
+    <div class="ws-main" id="wsMain">
+      <div class="ed-bar">
+        <input id="edTitle" aria-label="Script title" />
+        <select id="edType" aria-label="Script type"></select>
+        <button id="edCheck" title="Check every soundbite against the transcripts">Check bites</button>
+        <button id="edExport" title="Save as a Word document">Export</button>
+        <span class="more"><button class="quiet" data-more aria-label="More">More</button><span class="menu">
+          <button id="edCopy">Copy script</button><button id="edDelete">Delete script</button></span></span>
+      </div>
+      <textarea id="edBody" spellcheck="true" placeholder="Write here, or ask the assistant on the right to start a draft from your transcripts.
+
+Soundbites look like this, so the app can check them:
+A001 [01:02:03:04 - 01:02:09:12] AMY: &quot;Exact words from the transcript.&quot;
+
+## Section heading
+VO: Narration line.
+[B-ROLL: notes in square brackets]"></textarea>
+      <div class="checks" id="checks"></div>
+      <div class="ed-stats"><span id="edStats"></span><span class="spacer"></span><span id="edSaved"></span></div>
+    </div>
+    <aside class="chat" aria-label="Writing assistant">
+      <div class="chat-head"><strong>Assistant</strong><span class="k" id="chatModel"></span><button class="quiet" id="chatClear">Clear</button></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="chat-in">
+        <div class="sel" id="chatSel"></div>
+        <textarea id="chatText" placeholder="Ask for a draft, better bites, a tighter cut…"></textarea>
+        <div class="row2"><span class="k">⌘ Return to send</span><button class="primary" id="chatSend">Send</button></div>
+      </div>
+    </aside>
+  </div>
+</section>
 
 <div class="scrim" id="scrim"></div>
 
 <aside class="sheet" id="settings" aria-label="Settings">
   <h2>Settings</h2>
 
+  <h3>What to make</h3>
+  <div class="field switch">
+    <div><label for="askOutputs">Ask what to create each time</label><div class="hint">When off, new clips (and the watch folder) use your saved choices.</div></div>
+    <input id="askOutputs" type="checkbox" />
+  </div>
+  <div class="field"><button id="editDefaults">Saved file choices…</button><div class="hint" id="defaultsHint"></div></div>
+
+  <h3>AI for name fixes, summaries and translation</h3>
   <div class="field">
-    <label for="key">Claude API key</label>
-    <div class="keyrow"><input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" /><button id="saveKey">Save</button></div>
-    <div class="hint" id="keyState"></div>
+    <div class="seg" role="radiogroup" aria-label="AI provider">
+      <button data-ai="claude" role="radio">Claude</button>
+      <button data-ai="local" role="radio">On this Mac (free)</button>
+    </div>
+    <div class="hint" id="aiHint"></div>
+  </div>
+
+  <div id="claudeBox">
+    <div class="field">
+      <label for="key">Claude API key</label>
+      <div class="keyrow"><input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" /><button id="saveKey">Save</button></div>
+      <div class="hint" id="keyState"></div>
+    </div>
+    <div class="field">
+      <label for="claudeModel">Claude model</label>
+      <select id="claudeModel">
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recommended)</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5 (about 20 times cheaper, a little less careful)</option>
+        <option value="claude-opus-5-5">Claude Opus 5.5 (most capable, about twice the cost)</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="localBox" hidden>
+    <div class="field">
+      <label>Ollama</label>
+      <div class="hint" id="ollamaState"></div>
+    </div>
+    <div class="field">
+      <label for="localModel">Local model</label>
+      <select id="localModel"></select>
+      <div class="pathrow"><button id="pullModel">Download model</button><span class="path" id="pullState"></span></div>
+      <div class="meter" id="pullMeter" hidden><i style="width:0%"></i></div>
+      <div class="hint">Free and offline, but slower than Claude and a little less polished, especially for translation.</div>
+    </div>
   </div>
 
   <div class="field switch">
-    <div><label for="cleanup">Fix names and terms with Claude</label><div class="hint">Uses your names list. Leaves how people talk alone.</div></div>
+    <div><label for="cleanup">Fix names and terms</label><div class="hint">Uses your names list. Leaves how people talk alone.</div></div>
     <input id="cleanup" type="checkbox" />
   </div>
 
-  <div class="field switch">
-    <div><label for="summary">Write a summary with soundbites</label><div class="hint">A few sentences, the topics, and the best 5–10 bites with timecodes.</div></div>
-    <input id="summary" type="checkbox" />
-  </div>
-
+  <h3>Audio cleanup</h3>
   <div class="field">
-    <label for="translate">Also translate to</label>
-    <select id="translate">
-      <option value="">Don't translate</option>
-      <option>English</option><option>Spanish</option><option>Catalan</option><option>French</option><option>Italian</option>
-      <option>German</option><option>Portuguese</option><option>Dutch</option><option>Japanese</option><option>Chinese</option><option>Korean</option>
-    </select>
-    <div class="hint">Adds translated captions with the same timings, plus a translated transcript. Needs the API key.</div>
+    <label for="cleanService">Clean audio with</label>
+    <select id="cleanService"></select>
+    <div class="hint" id="cleanHint"></div>
+  </div>
+  <div class="field switch">
+    <div><label for="transcribeCleaned">Transcribe from the cleaned audio</label><div class="hint">Helps with noisy recordings.</div></div>
+    <input id="transcribeCleaned" type="checkbox" />
+  </div>
+  <div class="field">
+    <label for="elKey">ElevenLabs API key</label>
+    <div class="keyrow"><input id="elKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="elevenlabs" data-input="elKey">Save</button></div>
+    <div class="hint" data-keystate="elevenlabs"></div>
+  </div>
+  <div class="field">
+    <label for="auKey">Auphonic API key</label>
+    <div class="keyrow"><input id="auKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="auphonic" data-input="auKey">Save</button></div>
+    <div class="hint" data-keystate="auphonic"></div>
+  </div>
+  <div class="field">
+    <label for="acKey">ai-coustics API key</label>
+    <div class="keyrow"><input id="acKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="aicoustics" data-input="acKey">Save</button></div>
+    <div class="hint" data-keystate="aicoustics"></div>
   </div>
 
+  <h3>Transcription</h3>
   <div class="field">
     <label for="speakers">People talking</label>
     <select id="speakers">
@@ -225,12 +443,10 @@
     </select>
     <div class="hint">If you know the number, speaker labels get more accurate.</div>
   </div>
-
   <div class="field switch">
     <div><label for="ask">Ask me to name speakers</label><div class="hint">Opens the naming window when a clip finishes.</div></div>
     <input id="ask" type="checkbox" />
   </div>
-
   <div class="field">
     <label for="language">Spoken language</label>
     <select id="language">
@@ -239,13 +455,11 @@
       <option value="it">Italian</option><option value="de">German</option><option value="pt">Portuguese</option><option value="ja">Japanese</option>
     </select>
   </div>
-
   <div class="field">
     <label for="names">Names and terms</label>
     <textarea id="names" placeholder="Oriol Castro&#10;Disfrutar&#10;Eduard Xatruch"></textarea>
-    <div class="hint">One per line. Whisper listens for these and Claude fixes their spelling. For one project only, put a names.txt file in that project's footage folder.</div>
+    <div class="hint">One per line. Whisper listens for these and the AI fixes their spelling. For one project only, put a names.txt file in that project's footage folder.</div>
   </div>
-
   <div class="field">
     <label for="lineLen">Caption line length</label>
     <select id="lineLen">
@@ -254,22 +468,6 @@
       <option value="37">37 characters</option>
     </select>
   </div>
-
-  <div class="field">
-    <label for="claudeModel">Claude model</label>
-    <select id="claudeModel">
-      <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recommended)</option>
-      <option value="claude-haiku-5-5">Claude Haiku 5.5 (about 20 times cheaper, a little less careful)</option>
-      <option value="claude-opus-5-5">Claude Opus 5.5 (most capable, about twice the cost)</option>
-    </select>
-    <div class="hint">Used for name fixes, summaries and translation. Transcription itself always runs on your Mac.</div>
-  </div>
-
-  <div class="field">
-    <label>Claude spending</label>
-    <div id="spendDetail" class="hint"></div>
-  </div>
-
   <div class="field">
     <label for="model">Whisper model</label>
     <select id="model">
@@ -280,9 +478,12 @@
     <div class="hint" id="engineHint"></div>
   </div>
 
+  <h3>Spending</h3>
+  <div class="field"><div id="spendDetail" class="hint"></div></div>
+
+  <h3>About</h3>
   <div class="field">
-    <label>About</label>
-    <div class="hint">Transcribe 2.1<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Cleanup, summaries and translation by Claude.</div>
+    <div class="hint">Transcribe 3.2<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Name fixes, summaries and translation by Claude or a free local model. Audio cleanup on this Mac or by ElevenLabs, Auphonic or ai-coustics. Dialogue, music and effects separation by the BandIt Plus model (Watcharasupat et al.), run on this Mac.</div>
   </div>
 </aside>
 
@@ -318,6 +519,80 @@
     <button class="quiet" id="sumCopy">Copy soundbites</button>
     <button id="sumDoc">Open summary doc</button>
     <button class="primary" id="sumClose">Done</button>
+  </div>
+</div>
+
+<div class="modal" id="createModal" role="dialog" aria-modal="true" aria-labelledby="createTitle">
+  <h2 id="createTitle">Create files</h2>
+  <p class="clips" id="createClips"></p>
+  <div class="create-cols">
+    <div>
+      <h4>Files</h4>
+      <label class="choice"><input type="checkbox" value="srt" name="cf" /> <span>Captions (.srt)<div class="hint">Ready to import into Premiere</div></span></label>
+      <label class="choice"><input type="checkbox" value="docx" name="cf" /> <span>Transcript (Word)<div class="hint">Timecoded, with speaker names</div></span></label>
+      <label class="choice"><input type="checkbox" value="txt" name="cf" /> <span>Transcript (text)</span></label>
+      <label class="choice"><input type="checkbox" value="summary" name="cf" /> <span>Summary and soundbites</span></label>
+      <label class="choice"><input type="checkbox" value="clean" name="cf" /> <span>Clean audio (.wav)<div class="hint">Same length as the clip, so it stays in sync</div></span></label>
+      <div class="field" id="cleanWithBox" style="margin:6px 0 0 24px"><select id="cfCleanup" aria-label="Clean audio with"></select><div class="warn" id="cfCleanWarn"></div></div>
+      <label class="choice"><input type="checkbox" value="stems" name="cf" /> <span>Dialogue, music &amp; effects stems (.wav)<div class="hint">Three files, same length as the clip. Free, on your Mac. Takes a while on long clips.</div></span></label>
+      <div class="warn" id="cfStemsWarn" style="margin:0 0 6px 24px"></div>
+      <div class="warn" id="cfAiWarn"></div>
+    </div>
+    <div>
+      <h4>Translate to</h4>
+      <div class="langs" id="cfLangs"></div>
+      <h4 style="margin-top:14px">Save to</h4>
+      <label class="choice"><input type="radio" name="cfDest" value="beside" /> <span>Next to each clip</span></label>
+      <label class="choice"><input type="radio" name="cfDest" value="subfolder" /> <span>A Transcripts folder next to each clip</span></label>
+      <label class="choice"><input type="radio" name="cfDest" value="folder" /> <span>One folder</span></label>
+      <div class="pathrow"><button id="cfChoose">Choose folder…</button><span class="path" id="cfDir"></span></div>
+    </div>
+  </div>
+  <label class="choice" style="margin-top:12px"><input type="checkbox" id="cfRemember" /> <span>Save these as my choices</span></label>
+  <label class="choice"><input type="checkbox" id="cfDontAsk" /> <span>Don't ask again (change this in Settings)</span></label>
+  <div class="foot">
+    <button class="quiet" id="cfCancel">Cancel</button>
+    <button class="primary" id="cfStart">Start</button>
+  </div>
+</div>
+
+
+<div class="modal narrow" id="pickModal" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
+  <h2 id="pickTitle">Add clips from Recent</h2>
+  <p class="sub">Clips you've transcribed. The assistant reads their transcripts and summaries.</p>
+  <div class="pick-list" id="pickList"></div>
+  <div class="foot">
+    <button class="quiet" id="pickCancel">Cancel</button>
+    <button class="primary" id="pickAdd">Add to project</button>
+  </div>
+</div>
+
+
+<div class="modal narrow" id="cloneModal" role="dialog" aria-modal="true" aria-labelledby="cloneTitle">
+  <h2 id="cloneTitle">Clone a voice</h2>
+  <p class="sub" id="cloneSub"></p>
+  <div id="clonePlan" class="hint"></div>
+  <div class="consent">
+    <label class="choice"><input type="checkbox" id="cloneAgree" /> <span id="cloneAgreeText"></span></label>
+    <div class="field" style="margin:8px 0 0"><label for="cloneBy">Who gave permission, and how</label>
+      <input id="cloneBy" placeholder="e.g. Amy Chen, appearance release signed Nov 3" /></div>
+  </div>
+  <label class="choice"><input type="checkbox" id="cloneNoise" /> <span>Remove background noise first<div class="hint">Only if the interview has noise and you didn't make clean audio or stems.</div></span></label>
+  <p class="hint">Every line made with this voice is marked as synthetic: in the script, in Check bites, in Word exports, in the file name, and in the project's log. ElevenLabs keeps the voice in your account until you remove it here.</p>
+  <div class="warn" id="cloneWarn"></div>
+  <div class="foot">
+    <button class="quiet" id="cloneCancel">Cancel</button>
+    <button class="primary" id="cloneGo" disabled>Clone voice</button>
+  </div>
+</div>
+
+<div class="modal" id="logModal" role="dialog" aria-modal="true" aria-labelledby="logTitle">
+  <h2 id="logTitle">Generated-voice log</h2>
+  <p class="sub">Every voice cloned and every line generated in this project, with who gave permission. Share it with your producer or network if they ask.</p>
+  <div class="logbox" id="logText"></div>
+  <div class="foot">
+    <button class="quiet" id="logCopy">Copy</button>
+    <button class="primary" id="logClose">Done</button>
   </div>
 </div>
 
@@ -373,14 +648,15 @@ function renderQueue() {
     const pct = Math.round((j.frac || 0) * 100);
     const indet = j.status === "running" && j.stage === "Transcribing" && S.engine === "mlx";
     return `<div class="row ${j.status}">
-      <div><div class="name" title="${esc(j.path)}">${esc(j.name)}</div><div class="where">${esc(j.folder)}</div></div>
+      <div><div class="name" title="${esc(j.path)}">${esc(j.name)}</div><div class="where">${esc(j.plan ? j.plan : j.folder)}</div></div>
       <div><div class="status ${j.status}">${esc(statusText(j))}</div>
         ${j.status === "running" || j.status === "queued" ? `<div class="bar"><i class="${indet ? "indet" : ""}" style="width:${pct}%"></i></div>` : ""}
         ${j.status === "done" && j.cost ? `<div class="cost">Claude: ${money(j.cost)}</div>` : ""}</div>
       <div class="actions">
         ${j.status === "done" && j.kind === "translate" ? `${j.outputs[0] ? `<button data-open="${esc(j.outputs[0])}">Open translation</button>` : ""}<button class="quiet" data-reveal="${esc(j.outputs[0] || j.path)}">Show in Finder</button>` : ""}
         ${j.status === "done" && j.kind === "summarize" ? `<button data-summary="${esc(j.path)}">Summary</button>` : ""}
-        ${j.status === "done" && !j.kind ? clipActions({ path: j.path, outputs: j.outputs, speakers: j.speakers, named: j.named, hasSummary: j.has_summary }) : ""}
+        ${j.status === "done" && !j.kind && !j.speakers && j.outputs.length && j.outputs.every((o) => o.endsWith(" - clean.wav")) ? `<button data-open="${esc(j.outputs[0])}">Play clean audio</button><button class="quiet" data-reveal="${esc(j.outputs[0])}">Show in Finder</button>` : ""}
+        ${j.status === "done" && !j.kind && !(j.outputs.length && j.outputs.every((o) => o.endsWith(" - clean.wav"))) ? clipActions({ path: j.path, outputs: j.outputs, speakers: j.speakers, named: j.named, hasSummary: j.has_summary }) : ""}
         ${j.status === "failed" ? `<button data-retry="${esc(j.id)}">Try again</button>` : ""}
       </div>
       ${j.status === "failed" && j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
@@ -402,7 +678,8 @@ function renderLog() { $("#log").textContent = S.log.join("\n") || "No activity 
 function renderSpend() {
   const m = S.usage.this_month;
   $("#spendBtn").textContent = `Claude this month: ${money(m.usd)}`;
-  $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`;
+  $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`
+    + (Object.keys(m.services || {}).length ? `<br><br>Audio processed this month: ${Object.entries(m.services).map(([k, v]) => `${esc(k === "stems" ? "Stems (on this Mac)" : k === "elevenlabs_voice" ? "ElevenLabs cloned voice" : S.cleanupServices[k] || k)} ${v.toFixed(1)} min`).join(", ")}.` : "");
 }
 function renderHeader() {
   renderSpend();
@@ -413,9 +690,14 @@ function renderHeader() {
 function loadSettingsForm() {
   const s = S.settings;
   $("#cleanup").checked = !!s.claude_cleanup;
-  $("#summary").checked = s.summary !== false;
+  $("#askOutputs").checked = s.ask_outputs !== false;
+  $("#transcribeCleaned").checked = s.transcribe_cleaned !== false;
+  $("#cleanService").innerHTML = Object.entries(S.cleanupServices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  $("#cleanService").value = s.audio_cleanup || "local";
+  $("#localModel").innerHTML = Object.entries(S.ollama.choices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  $("#localModel").value = s.local_model || "qwen2.5:7b";
+  renderAi();
   $("#ask").checked = s.ask_speaker_names !== false;
-  $("#translate").value = s.translate_to || "";
   $("#speakers").value = String(s.speakers || "auto");
   $("#language").value = s.language || "auto";
   $("#lineLen").value = String(s.max_chars_per_line || 42);
@@ -426,9 +708,43 @@ function loadSettingsForm() {
   renderKeyState();
   settingsLoaded = true;
 }
+const SERVICE_NAMES = { elevenlabs: "ElevenLabs", auphonic: "Auphonic", aicoustics: "ai-coustics" };
+function renderServiceKeys() {
+  document.querySelectorAll("[data-keystate]").forEach((el) => {
+    const svc = el.dataset.keystate;
+    el.innerHTML = S.keys[svc] ? `<span class="ok">Key saved in your Keychain.</span> <button class="quiet" data-delkey="${svc}">Remove</button>` : "No key saved.";
+  });
+  const svc = $("#cleanService").value;
+  $("#cleanHint").textContent = svc === "local"
+    ? (S.localCleanup ? "Free and offline. Good for hum, room noise and wind." : "Needs an Apple Silicon Mac. Pick a service instead.")
+    : svc === "elevenlabs" ? "Pulls the voice out of noisy or music-heavy audio. Uses your ElevenLabs credits."
+    : svc === "auphonic" ? "Noise and reverb reduction, leveling, broadcast loudness (-23 LUFS). 2 free hours a month."
+    : "Studio-style speech enhancement, loudness -23 LUFS. Paid, with a free trial.";
+}
+function renderAi() {
+  const ai = S.settings.ai_provider === "local" ? "local" : "claude";
+  document.querySelectorAll("[data-ai]").forEach((b) => { b.classList.toggle("on", b.dataset.ai === ai); b.setAttribute("aria-checked", b.dataset.ai === ai); });
+  $("#claudeBox").hidden = ai !== "claude";
+  $("#localBox").hidden = ai !== "local";
+  const o = S.ollama;
+  $("#aiHint").textContent = ai === "claude" ? "Best quality. About a cent per transcript." : "Free and private: nothing leaves your Mac.";
+  $("#ollamaState").innerHTML = o.running
+    ? (o.hasModel ? `<span class="ok">Running, and the model is ready.</span>` : "Running. Download the model below to use it.")
+    : `Not running. Install the free Ollama app from ollama.com, open it, then come back here. <button class="quiet" id="ollamaRefresh">Check again</button>`;
+  const p = o.pull;
+  $("#pullMeter").hidden = !p.busy;
+  $("#pullMeter i").style.width = Math.round((p.frac || 0) * 100) + "%";
+  $("#pullState").textContent = p.error ? p.error : p.busy ? `${p.status} ${Math.round((p.frac || 0) * 100)}%` : (o.hasModel ? "Downloaded" : "");
+  $("#pullModel").disabled = !o.running || p.busy || o.hasModel;
+  const r = $("#ollamaRefresh"); if (r) r.onclick = async () => { await api("/api/ollama/refresh", {}); refresh(); };
+}
 function renderKeyState() {
   $("#keyState").innerHTML = S.hasKey ? `<span class="ok">Key saved in your Keychain.</span> <button class="quiet" id="removeKey">Remove</button>` : "No key saved. Transcription still works; name fixes and translation need a key.";
   const rm = $("#removeKey"); if (rm) rm.onclick = async () => { await api("/api/key/delete", {}); await refresh(); renderKeyState(); toast("Key removed"); };
+  renderServiceKeys();
+  const d = S.defaults, names = { srt: "captions", docx: "Word transcript", txt: "text transcript", summary: "summary", clean: "clean audio" };
+  $("#defaultsHint").textContent = "Saved: " + (d.files.map((f) => names[f]).join(", ") || "nothing") + (d.translate.length ? `, translated to ${d.translate.join(", ")}` : "")
+    + ". Saved " + (d.dest === "folder" ? `to ${d.dir || "a folder"}` : d.dest === "subfolder" ? "in a Transcripts folder" : "next to each clip") + ".";
 }
 
 async function refresh() {
@@ -437,6 +753,9 @@ async function refresh() {
   if (tab === "queue") renderQueue();
   if (tab === "log") renderLog();
   if (!settingsLoaded) loadSettingsForm();
+  else if ($("#settings").classList.contains("open")) { renderAi(); renderServiceKeys(); }
+  if (S.pending.length && !document.querySelector(".modal.open")) openCreate(false);
+  if ($("#createModal").classList.contains("open") && !createDefaultsOnly) $("#createClips").textContent = clipLine();
   // offer naming for newly finished multi-speaker clips
   if (S.settings.ask_speaker_names !== false) {
     for (const j of S.jobs) {
@@ -507,8 +826,10 @@ document.addEventListener("click", async (e) => {
     else if (t.dataset.tab) {
       tab = t.dataset.tab;
       document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.classList.toggle("on", b === t));
-      ["queue", "recent", "log"].forEach((id) => ($("#" + id).hidden = id !== tab));
-      if (tab === "recent") renderRecent(); else refresh();
+      ["queue", "recent", "projects", "log"].forEach((id) => ($("#" + id).hidden = id !== tab));
+      $("#clearBtn").hidden = tab === "projects";
+      $("#drop").hidden = tab === "projects";
+      if (tab === "recent") renderRecent(); else if (tab === "projects") renderProjects(); else refresh();
     }
     closeMenus();
   } catch (err) { toast(err.message, 4000); }
@@ -573,7 +894,7 @@ $("#sumCopy").onclick = async () => {
   try { await navigator.clipboard.writeText(text); toast("Soundbites copied"); } catch (e) { toast("Couldn't copy. Open the summary doc instead."); }
 };
 const add = async (kind) => {
-  try { const r = await api("/api/pick", { kind }); if (r.found && !r.added) toast("Those clips are already in the queue"); else if (!r.found && r.found !== undefined) toast("No audio or video files there"); refresh(); }
+  try { const r = await api("/api/pick", { kind }); if (r.found === 0) toast("No audio or video files there"); refresh(); }
   catch (e) { toast(e.message); }
 };
 $("#addFiles").onclick = () => add("files");
@@ -605,7 +926,11 @@ $("#scrim").onclick = () => {
 document.addEventListener("click", (e) => { if (!e.target.closest(".more")) closeMenus(); });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if ($("#pickModal").classList.contains("open")) { closeModal("#pickModal"); return; }
+  if ($("#cloneModal").classList.contains("open")) { closeModal("#cloneModal"); return; }
+  if ($("#logModal").classList.contains("open")) { closeModal("#logModal"); return; }
   if ($("#namer").classList.contains("open")) closeNamer();
+  else if ($("#createModal").classList.contains("open")) $("#cfCancel").click();
   else if ($("#trModal").classList.contains("open")) closeModal("#trModal");
   else if ($("#sumModal").classList.contains("open")) { $("#player").pause(); closeModal("#sumModal"); }
   else openSettings(false);
@@ -613,14 +938,88 @@ document.addEventListener("keydown", (e) => {
 const saveSetting = async (k, v, msg) => { await api("/api/settings", { [k]: v }); S.settings[k] = v; toast(msg || "Saved"); };
 $("#cleanup").onchange = (e) => saveSetting("claude_cleanup", e.target.checked, e.target.checked ? "Claude will fix names and terms" : "Claude cleanup off");
 $("#ask").onchange = (e) => saveSetting("ask_speaker_names", e.target.checked);
-$("#summary").onchange = (e) => saveSetting("summary", e.target.checked, e.target.checked ? "New clips get a summary and soundbites" : "Summaries off");
 $("#spendBtn").onclick = () => openSettings(true);
-$("#translate").onchange = (e) => saveSetting("translate_to", e.target.value, e.target.value ? `New clips will also be translated to ${e.target.value}` : "Translation off");
 $("#speakers").onchange = (e) => saveSetting("speakers", e.target.value);
 $("#language").onchange = (e) => saveSetting("language", e.target.value);
 $("#lineLen").onchange = (e) => saveSetting("max_chars_per_line", Number(e.target.value));
 $("#claudeModel").onchange = (e) => saveSetting("claude_model", e.target.value, `Claude model: ${e.target.selectedOptions[0].textContent.split(" (")[0]}`);
 $("#model").onchange = (e) => saveSetting("model", e.target.value, "Saved. A new model downloads the first time it's used.");
+$("#askOutputs").onchange = (e) => saveSetting("ask_outputs", e.target.checked, e.target.checked ? "I'll ask what to create" : "New clips use your saved choices");
+$("#transcribeCleaned").onchange = (e) => saveSetting("transcribe_cleaned", e.target.checked);
+$("#cleanService").onchange = (e) => { saveSetting("audio_cleanup", e.target.value); S.settings.audio_cleanup = e.target.value; renderServiceKeys(); };
+$("#localModel").onchange = async (e) => { await saveSetting("local_model", e.target.value); await api("/api/ollama/refresh", {}); refresh(); };
+$("#pullModel").onclick = async () => { try { await api("/api/ollama/pull", { model: $("#localModel").value }); toast("Downloading the model. This can take a while."); refresh(); } catch (e) { toast(e.message, 4000); } };
+document.querySelectorAll("[data-ai]").forEach((b) => (b.onclick = async () => {
+  await saveSetting("ai_provider", b.dataset.ai, b.dataset.ai === "local" ? "Using the free local model" : "Using Claude");
+  S.settings.ai_provider = b.dataset.ai; renderAi();
+}));
+document.querySelectorAll("[data-savekey]").forEach((b) => (b.onclick = async () => {
+  const input = $("#" + b.dataset.input);
+  try { await api("/api/secret", { service: b.dataset.savekey, key: input.value.trim() }); input.value = ""; await refresh(); renderServiceKeys(); toast(`${SERVICE_NAMES[b.dataset.savekey]} key saved to your Keychain`); }
+  catch (e) { toast(e.message, 4000); }
+}));
+$("#settings").addEventListener("click", async (e) => {
+  const t = e.target.closest("[data-delkey]"); if (!t) return;
+  await api("/api/secret/delete", { service: t.dataset.delkey }); await refresh(); renderServiceKeys(); toast("Key removed");
+});
+$("#editDefaults").onclick = () => openCreate(true);
+
+// ---------------- "Create files" window
+const CF_LANGS = ["English", "Spanish", "Catalan", "French", "Italian", "German", "Portuguese", "Japanese"];
+let createDefaultsOnly = false, cfDir = "";
+const clipLine = () => S.pending.length === 1 ? S.pending[0].name : `${S.pending.length} clips: ${S.pending.map((p) => p.name).join(", ")}`;
+function openCreate(defaultsOnly) {
+  createDefaultsOnly = defaultsOnly;
+  const d = S.defaults;
+  $("#createTitle").textContent = defaultsOnly ? "Saved file choices" : "Create files";
+  $("#createClips").textContent = defaultsOnly ? "Used for the watch folder, and when Transcribe doesn't ask." : clipLine();
+  document.querySelectorAll('input[name="cf"]').forEach((i) => (i.checked = d.files.includes(i.value)));
+  $("#cfLangs").innerHTML = CF_LANGS.map((l) => `<label><input type="checkbox" value="${l}" ${d.translate.includes(l) ? "checked" : ""} /> ${l}</label>`).join("");
+  $("#cfCleanup").innerHTML = Object.entries(S.cleanupServices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  $("#cfCleanup").value = d.cleanup || "local";
+  document.querySelectorAll('input[name="cfDest"]').forEach((r) => (r.checked = r.value === d.dest));
+  cfDir = d.dir || ""; $("#cfDir").textContent = cfDir || "No folder chosen";
+  $("#cfRemember").checked = defaultsOnly; $("#cfRemember").closest("label").hidden = defaultsOnly;
+  $("#cfDontAsk").checked = S.settings.ask_outputs === false; $("#cfDontAsk").closest("label").hidden = defaultsOnly;
+  $("#cfStart").textContent = defaultsOnly ? "Save" : "Start";
+  cfCheck();
+  $("#createModal").classList.add("open"); $("#scrim").classList.add("open");
+}
+function cfOpts() {
+  return {
+    files: [...document.querySelectorAll('input[name="cf"]:checked')].map((i) => i.value),
+    translate: [...document.querySelectorAll("#cfLangs input:checked")].map((i) => i.value),
+    dest: (document.querySelector('input[name="cfDest"]:checked') || {}).value || "beside",
+    dir: cfDir, cleanup: $("#cfCleanup").value,
+  };
+}
+function cfCheck() {
+  const o = cfOpts();
+  $("#cleanWithBox").hidden = !o.files.includes("clean");
+  const svc = o.cleanup;
+  $("#cfCleanWarn").textContent = !o.files.includes("clean") ? ""
+    : svc === "local" ? (S.localCleanup ? "" : "On-Mac cleanup needs an Apple Silicon Mac.")
+    : S.keys[svc] ? "" : `Add your ${SERVICE_NAMES[svc]} key in Settings first.`;
+  $("#cfStemsWarn").textContent = o.files.includes("stems") && !S.stems ? "Stems need an Apple Silicon Mac. Run the installer again to add them." : "";
+  const needsAi = o.files.includes("summary") || o.translate.length;
+  const ai = S.settings.ai_provider === "local" ? "local" : "claude";
+  $("#cfAiWarn").textContent = !needsAi ? ""
+    : ai === "claude" ? (S.hasKey ? "" : "Summaries and translation need your Claude key, or switch to the free local model in Settings.")
+    : (S.ollama.running && S.ollama.hasModel ? "" : "Summaries and translation need the local model. Set it up in Settings.");
+  $("#cfChoose").disabled = o.dest !== "folder";
+}
+$("#createModal").addEventListener("change", cfCheck);
+$("#cfChoose").onclick = async () => { try { const r = await api("/api/pick", { kind: "dest" }); if (r.dir) { cfDir = r.dir; $("#cfDir").textContent = r.dir; } } catch (e) { toast(e.message); } };
+$("#cfCancel").onclick = async () => { if (!createDefaultsOnly) await api("/api/pending/clear", {}); closeModal("#createModal"); refresh(); };
+$("#cfStart").onclick = async () => {
+  try {
+    const r = await api("/api/start", { opts: cfOpts(), remember: $("#cfRemember").checked, dontAsk: $("#cfDontAsk").closest("label").hidden ? null : $("#cfDontAsk").checked, defaultsOnly: createDefaultsOnly });
+    closeModal("#createModal");
+    toast(createDefaultsOnly ? "Choices saved" : `Started ${r.added} clip${r.added === 1 ? "" : "s"}`);
+    settingsLoaded = false; refresh();
+  } catch (e) { toast(e.message, 4000); }
+};
+
 let namesTimer;
 $("#names").oninput = () => { clearTimeout(namesTimer); namesTimer = setTimeout(async () => { await api("/api/names", { text: $("#names").value }); toast("Names saved"); }, 700); };
 $("#saveKey").onclick = async () => {
@@ -628,8 +1027,415 @@ $("#saveKey").onclick = async () => {
   catch (e) { toast(e.message, 4000); }
 };
 
+
+// ---------------- projects + scripts
+const WS = { open: false, id: null, view: null, script: null, undo: [], saveT: null, busy: false, waiting: false, results: null };
+const STARTERS = {
+  paper: ["Build a 3-minute string-out from the strongest bites", "Find every bite about the menu", "Tighten this to 90 seconds", "What's missing from this story?"],
+  vo: ["Write a 60-second VO from these interviews", "Make this easier to read aloud", "Give me three opening lines"],
+  promo: ["Cut a 30-second promo with a strong hook", "Give me five hooks I could open on", "Make a 15-second social version"],
+  free: ["Outline the story these interviews tell", "Write follow-up interview questions", "Draft a YouTube title and description"],
+};
+const fmtDur = (s) => { s = Math.round(s || 0); const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, "0")}`; };
+const ago = (t) => new Date(t * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+async function renderProjects() {
+  const { items } = await api("/api/projects");
+  $("#projects").innerHTML = `<div class="proj-new"><input id="projName" placeholder="New project name, like Chef Doc or Spring Promo" />
+      <button class="primary" id="projCreate">New project</button></div>`
+    + (items.length ? items.map((p) => `<div class="row done">
+      <div><div class="name">${esc(p.name)}</div><div class="where">${p.clips} clip${p.clips === 1 ? "" : "s"} · ${p.scripts} script${p.scripts === 1 ? "" : "s"}</div></div>
+      <div><div class="status">${esc(ago(p.updated))}</div></div>
+      <div class="actions"><button class="primary" data-wsopen="${esc(p.id)}">Open</button></div></div>`).join("")
+      : `<div class="empty">A project holds clips and the scripts you write from them: paper edits, VO, promos, anything. Make one above.</div>`);
+  $("#projCreate").onclick = createProject;
+  $("#projName").onkeydown = (e) => { if (e.key === "Enter") createProject(); };
+}
+async function createProject() {
+  try { const p = await api("/api/project/create", { name: $("#projName").value }); openWs(p.id); }
+  catch (e) { toast(e.message); }
+}
+async function openWs(id) {
+  WS.open = true; WS.id = id; WS.script = null; WS.results = null;
+  $("#ws").classList.add("open");
+  await loadProject(id);
+  if (WS.view.scripts.length) openScript(WS.view.scripts[0].id); else showNoScript();
+}
+async function loadProject(id, quiet) {
+  const v = await api("/api/project?id=" + id);
+  WS.view = v;
+  if (!quiet || document.activeElement !== $("#wsName")) $("#wsName").value = v.name;
+  if (!quiet) $("#wsNotes").value = v.notes || "";
+  $("#newScriptMenu").innerHTML = Object.entries(v.types).map(([k, n]) => `<button data-wsnew="${k}">${esc(n)}</button>`).join("");
+  $("#edType").innerHTML = Object.entries(v.types).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
+  renderScriptList(); renderClipList(); renderVoices();
+  WS.waiting = v.clips.some((c) => c.exists && !c.ready);
+  $("#chatModel").textContent = S && S.settings.ai_provider === "local" ? `Local: ${S.settings.local_model}` : (S ? (S.settings.claude_model || "").replace("claude-", "Claude ").replace(/-(\d)-(\d)$/, " $1.$2").replace("sonnet", "Sonnet").replace("haiku", "Haiku").replace("opus", "Opus") : "");
+}
+function renderScriptList() {
+  const v = WS.view;
+  $("#wsScripts").innerHTML = v.scripts.length ? v.scripts.map((s) => `<button class="ws-item ${WS.script && WS.script.id === s.id ? "on" : ""}" data-wsscript="${esc(s.id)}">
+      <span class="t">${esc(s.title)}</span><span class="k">${esc(v.types[s.type])}</span></button>`).join("")
+    : `<div class="hint" style="padding:0 8px">No scripts yet.</div>`;
+}
+function renderClipList() {
+  const v = WS.view;
+  $("#wsClips").innerHTML = v.clips.length ? v.clips.map((c) => `<div class="clip-row" title="${esc(c.path)}">
+      <span class="t">${esc(c.label)}</span>
+      <span class="k ${c.ready ? "" : "wait"}">${!c.exists ? "Clip moved or deleted" : c.ready ? `${fmtDur(c.secs)}${c.speakers.length ? " · " + esc(c.speakers.join(", ")) : c.nspeakers > 1 ? ` · ${c.nspeakers} speakers` : ""}` : "Not transcribed yet"}</span>
+      <button class="quiet" data-wsrmclip="${esc(c.path)}" aria-label="Remove ${esc(c.label)} from the project">×</button></div>`).join("")
+    : `<div class="hint" style="padding:0 8px">Add clips so the assistant can quote them.</div>`;
+}
+function showNoScript() {
+  WS.script = null; renderScriptList();
+  $("#wsMain").querySelectorAll(".ed-bar, #edBody, .checks, .ed-stats").forEach((el) => (el.hidden = true));
+  let e = $("#wsEmpty");
+  if (!e) { e = document.createElement("div"); e.id = "wsEmpty"; e.className = "ws-empty"; $("#wsMain").appendChild(e); }
+  e.hidden = false; e.style.gridRow = "1 / -1";
+  e.innerHTML = `<div><strong>Start a script</strong><div class="hint">Pick a kind. You can change it later.</div>
+    <div class="buttons">${Object.entries(WS.view.types).map(([k, n]) => `<button data-wsnew="${k}">${esc(n)}</button>`).join("")}</div></div>`;
+  $("#msgs").innerHTML = ""; $("#chatText").disabled = true; $("#chatSend").disabled = true;
+}
+async function openScript(sid) {
+  await flushSave();
+  const s = await api(`/api/script?project=${WS.id}&id=${sid}`);
+  WS.script = s; WS.undo = []; WS.results = null;
+  const e = $("#wsEmpty"); if (e) e.hidden = true;
+  $("#wsMain").querySelectorAll(".ed-bar, #edBody, .ed-stats").forEach((el) => (el.hidden = false));
+  $("#checks").hidden = false; $("#checks").classList.remove("open");
+  $("#edTitle").value = s.title; $("#edType").value = s.type; $("#edBody").value = s.body;
+  $("#chatText").disabled = false; $("#chatSend").disabled = false;
+  $("#edSaved").textContent = "Saved";
+  renderScriptList(); renderChat(); updateStats(); updateSel();
+}
+function updateStats(st) {
+  const body = $("#edBody").value;
+  const words = (body.match(/\b\w+\b/g) || []).length;
+  const bites = body.split("\n").filter((l) => /\[\s*\d{1,2}:\d{2}:\d{2}(?:[:;.]\d{2})?\s*[-–—]\s*\d{1,2}:\d{2}:\d{2}(?:[:;.]\d{2})?\s*\]/.test(l) && /["“].+["”]\s*$/.test(l)).length;
+  const vo = body.split("\n").filter((l) => /^\s*VO:/i.test(l)).reduce((n, l) => n + l.replace(/^\s*VO:/i, "").trim().split(/\s+/).filter(Boolean).length, 0);
+  const parts = [`${words} words`];
+  if (bites) parts.push(`${bites} soundbite${bites === 1 ? "" : "s"}${st && st.bite_secs ? `, ${fmtDur(st.bite_secs)}` : ""}`);
+  if (vo) parts.push(`VO ${vo} words, about ${fmtDur(vo / 150 * 60)} read`);
+  const syn = body.split("\n").filter((l) => /^\s*SYNTH\s+[^:]+:/i.test(l)).length;
+  if (syn) parts.push(`${syn} generated line${syn === 1 ? "" : "s"}`);
+  if (st && (st.bite_secs || vo)) parts.push(`total about ${fmtDur(st.bite_secs + vo / 150 * 60)}`);
+  $("#edStats").textContent = parts.join(" · ");
+}
+function scheduleSave() {
+  $("#edSaved").textContent = "Editing…";
+  clearTimeout(WS.saveT); WS.saveT = setTimeout(flushSave, 700);
+}
+async function flushSave() {
+  clearTimeout(WS.saveT); WS.saveT = null;
+  if (!WS.script) return;
+  const body = $("#edBody").value, title = $("#edTitle").value, type = $("#edType").value;
+  if (body === WS.script.body && title === WS.script.title && type === WS.script.type) { $("#edSaved").textContent = "Saved"; return; }
+  try {
+    await api("/api/script/save", { project: WS.id, id: WS.script.id, title, body, type });
+    Object.assign(WS.script, { body, title, type }); $("#edSaved").textContent = "Saved";
+    const item = WS.view.scripts.find((x) => x.id === WS.script.id); if (item) { item.title = title; item.type = type; renderScriptList(); }
+  } catch (e) { $("#edSaved").textContent = "Couldn't save: " + e.message; }
+}
+$("#edBody").addEventListener("input", () => { scheduleSave(); updateStats(WS.results && WS.results.stats); });
+$("#edTitle").addEventListener("input", scheduleSave);
+$("#edType").addEventListener("change", () => { flushSave(); renderChat(); });
+$("#wsName").addEventListener("change", async () => { try { await api("/api/project/update", { id: WS.id, name: $("#wsName").value }); toast("Renamed"); } catch (e) { toast(e.message); } });
+let notesT;
+$("#wsNotes").addEventListener("input", () => { clearTimeout(notesT); notesT = setTimeout(() => api("/api/project/update", { id: WS.id, notes: $("#wsNotes").value }).then(() => toast("Notes saved")).catch((e) => toast(e.message)), 800); });
+
+// selection → the assistant can rewrite just that part
+function selection() { const b = $("#edBody"); return b.value.slice(b.selectionStart, b.selectionEnd); }
+let lastSel = { start: 0, end: 0, text: "" };
+function updateSel() {
+  const b = $("#edBody");
+  if (document.activeElement === b) lastSel = { start: b.selectionStart, end: b.selectionEnd, text: selection() };
+  const w = lastSel.text.trim() ? lastSel.text.trim().split(/\s+/).length : 0;
+  $("#chatSel").classList.toggle("on", w > 0);
+  $("#chatSel").innerHTML = w ? `Using your selection (${w} word${w === 1 ? "" : "s"}). <button class="quiet" id="selClear" style="padding:0 4px">Don't</button>` : "";
+  const c = $("#selClear"); if (c) c.onclick = () => { lastSel = { start: 0, end: 0, text: "" }; updateSel(); };
+}
+["select", "keyup", "mouseup"].forEach((ev) => $("#edBody").addEventListener(ev, updateSel));
+
+function markUndo() {   // only the latest change can be undone, one step at a time
+  WS.script.chat.forEach((x) => (x.undoable = false));
+  const top = WS.undo[WS.undo.length - 1];
+  if (top && WS.script.chat[top.index]) WS.script.chat[top.index].undoable = true;
+}
+function renderChat(thinking, err) {
+  const s = WS.script; if (!s) return;
+  const m = $("#msgs");
+  let h = s.chat.map((x, i) => `<div class="msg ${x.role}">${esc(x.text)}${x.role === "assistant" && (x.edit && x.edit !== "none" || x.cost) ? `<div class="meta">
+      ${x.edit && x.edit !== "none" ? `<span>${x.edit === "append" ? "Added to the script" : x.edit === "replace_selection" ? "Rewrote your selection" : "Rewrote the script"}</span>` : ""}
+      ${x.undoable ? `<button data-wsundo="${i}">Undo</button>` : ""}${x.cost ? `<span>${money(x.cost)}</span>` : ""}</div>` : ""}</div>`).join("");
+  if (!s.chat.length && !thinking) {
+    h = `<div class="starters"><p>The assistant has read the transcripts${WS.view.clips.some((c) => c.ready) ? "" : " (once you add some clips)"}. Try:</p>
+      ${(STARTERS[$("#edType").value] || STARTERS.free).map((q) => `<button data-wsstarter="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+  }
+  if (thinking) h += `<div class="msg assistant thinking" id="thinking">Thinking…</div>`;
+  if (err) h += `<div class="msg assistant err">${esc(err)}</div>`;
+  m.innerHTML = h; m.scrollTop = m.scrollHeight;
+}
+async function sendChat(text) {
+  const msg = (text ?? $("#chatText").value).trim();
+  if (!msg || WS.busy || !WS.script) return;
+  await flushSave();
+  WS.busy = true; $("#chatSend").disabled = true;
+  const sel = lastSel.text.trim() ? lastSel : null;
+  WS.script.chat.push({ role: "user", text: msg }); $("#chatText").value = "";
+  renderChat(true);
+  const t0 = Date.now(); const tick = setInterval(() => { const el = $("#thinking"); if (el) el.textContent = `Thinking… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
+  try {
+    const r = await api("/api/script/chat", { project: WS.id, id: WS.script.id, message: msg, selection: sel ? sel.text : "" });
+    const a = { role: "assistant", text: r.reply, edit: r.edit, cost: r.cost };
+    if (r.edit !== "none") {
+      const b = $("#edBody"); const before = b.value;
+      if (r.edit === "replace_all") b.value = r.text.trim() + "\n";
+      else if (r.edit === "append") b.value = before.replace(/\s*$/, "") + (before.trim() ? "\n\n" : "") + r.text.trim() + "\n";
+      else if (r.edit === "replace_selection" && sel && before.slice(sel.start, sel.end) === sel.text) b.value = before.slice(0, sel.start) + r.text.trim() + before.slice(sel.end);
+      else b.value = before.replace(/\s*$/, "") + "\n\n" + r.text.trim() + "\n";
+      WS.undo.push({ index: WS.script.chat.length, body: before });
+      lastSel = { start: 0, end: 0, text: "" }; updateSel();
+      await flushSave(); updateStats();
+      runCheck(true);
+    }
+    WS.script.chat.push(a);
+    markUndo(); renderChat();
+    if (r.context && r.context.total && r.context.shown < r.context.total) toast(`The assistant read ${r.context.shown} of ${r.context.total} transcript lines (the rest didn't fit).`, 5000);
+    refresh().catch(() => {});
+  } catch (e) {
+    renderChat(false, e.message);
+  } finally { clearInterval(tick); WS.busy = false; $("#chatSend").disabled = false; }
+}
+$("#chatSend").onclick = () => sendChat();
+$("#chatText").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendChat(); } });
+$("#chatClear").onclick = async () => { if (!WS.script) return; await api("/api/script/clearchat", { project: WS.id, id: WS.script.id }); WS.script.chat = []; WS.undo = []; renderChat(); };
+
+// soundbite check
+async function runCheck(quiet) {
+  if (!WS.script) return;
+  try {
+    const r = await api("/api/script/check", { project: WS.id, body: $("#edBody").value });
+    WS.results = r; updateStats(r.stats);
+    const bad = r.results.filter((x) => x.status !== "ok").length;
+    if (quiet && !bad) { $("#checks").classList.remove("open"); return; }
+    renderChecks();
+  } catch (e) { if (!quiet) toast(e.message); }
+}
+function renderChecks() {
+  const r = WS.results; const el = $("#checks");
+  if (!r.results.length) { el.innerHTML = `<div class="top"><strong>No soundbites found.</strong><button class="quiet" id="chkClose">Close</button></div>
+      <div class="hint">Write them as: A001 [01:02:03:04 - 01:02:09:12] AMY: "exact words"</div>`; el.classList.add("open"); $("#chkClose").onclick = () => el.classList.remove("open"); return; }
+  const icon = { ok: "✓", tc: "!", close: "≈", missing: "✕", clip: "?", synth: "◆" };
+  const fixable = r.results.filter((x) => x.status === "tc" || x.status === "close").length;
+  const bad = r.results.filter((x) => x.status === "missing" || x.status === "clip").length;
+  const good = r.results.filter((x) => x.status === "ok").length;
+  const synth = r.results.filter((x) => x.status === "synth").length;
+  const real = r.results.length - synth;
+  el.innerHTML = `<div class="top"><strong>${real ? `${good} of ${real} soundbites match the transcripts exactly${bad ? `. ${bad} can't be found` : ""}` : "No real soundbites"}${synth ? `. ${synth} generated voice line${synth === 1 ? "" : "s"}` : ""}.</strong>
+      ${fixable ? `<button class="primary" id="chkFix">Fix ${fixable}</button>` : ""}<button class="quiet" id="chkClose">Close</button></div>`
+    + r.results.map((x, i) => `<div class="chk s-${x.status}" data-chkline="${x.line}">
+      <span class="ic">${icon[x.status]}</span>
+      ${x.path || x.file ? `<button class="play" data-chkplay="${i}" aria-label="Play this line">▶</button>` : "<span></span>"}
+      <div>${x.status === "synth" ? `<div class="q"><span class="synth-tag">SYNTHETIC</span>${esc(x.who)} “${esc(x.quote)}”</div>` : `<div class="q">${esc(x.clip)} “${esc(x.quote)}”</div>`}
+        <div class="n">${esc(x.note)}${x.fix_quote ? ` Transcript: “${esc(x.fix_quote)}”` : ""}${x.status === "tc" ? ` (${esc(x.fix_tin)} - ${esc(x.fix_tout)})` : ""}</div>
+        ${x.status === "synth" && x.voice ? `<div class="acts"><button data-synthsay="${i}">${x.file ? "Make again" : "Make it"}</button><button data-synthrec="${i}" title="Pick a recording of you reading the line. It keeps your timing and emphasis.">From my read…</button>${x.file ? `<button class="quiet" data-synthshow="${i}">Show in Finder</button>` : ""}</div>` : ""}
+        ${x.status === "synth" && !x.voice ? `<div class="acts"><button data-synthclone="${esc(x.who)}">Clone ${esc(x.who)}'s voice…</button></div>` : ""}</div></div>`).join("");
+  el.classList.add("open");
+  $("#chkClose").onclick = () => el.classList.remove("open");
+  const f = $("#chkFix"); if (f) f.onclick = fixBites;
+}
+async function fixBites() {
+  const before = $("#edBody").value;
+  try {
+    const r = await api("/api/script/fix", { project: WS.id, body: before });
+    $("#edBody").value = r.body; WS.results = r; WS.undo.push({ index: -1, body: before }); markUndo(); renderChat();
+    await flushSave(); updateStats(r.stats); renderChecks();
+    toast("Soundbites now match the transcripts", 3000);
+  } catch (e) { toast(e.message); }
+}
+$("#edCheck").onclick = () => runCheck(false);
+$("#checks").addEventListener("click", (e) => {
+  const pb = e.target.closest("[data-chkplay]");
+  if (pb) {
+    const x = WS.results.results[Number(pb.dataset.chkplay)]; const p = $("#player");
+    document.querySelectorAll("#checks .play.on").forEach((b) => { b.classList.remove("on"); b.textContent = "▶"; });
+    if (p.dataset.src === "chk" + pb.dataset.chkplay && !p.paused) { p.pause(); return; }
+    p.src = x.file ? `/api/audio?path=${encodeURIComponent(x.file)}&v=${Date.now()}` : `/api/snippet?path=${encodeURIComponent(x.path)}&start=${x.start}&end=${x.end}`; p.dataset.src = "chk" + pb.dataset.chkplay;
+    p.play().catch(() => toast("Couldn't play that soundbite")); pb.classList.add("on"); pb.textContent = "■";
+    p.onended = () => { pb.classList.remove("on"); pb.textContent = "▶"; };
+    return;
+  }
+  const sb = e.target.closest("[data-synthsay],[data-synthrec],[data-synthshow],[data-synthclone]");
+  if (sb) { synthAction(sb); return; }
+  const row = e.target.closest("[data-chkline]"); if (!row) return;
+  const b = $("#edBody"); const lines = b.value.split("\n"); const n = Number(row.dataset.chkline);
+  const start = lines.slice(0, n).reduce((a, l) => a + l.length + 1, 0);
+  b.focus(); b.setSelectionRange(start, start + (lines[n] || "").length);
+  const lh = parseFloat(getComputedStyle(b).lineHeight) || 22; b.scrollTop = Math.max(0, n * lh - b.clientHeight / 3);
+});
+
+$("#edExport").onclick = async () => {
+  await flushSave();
+  try { const r = await api("/api/script/export", { project: WS.id, id: WS.script.id }); if (r.path) { toast("Saved " + base(r.path)); api("/api/open", { path: r.path, reveal: true }); } }
+  catch (e) { toast(e.message, 4000); }
+};
+$("#edCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#edBody").value); toast("Script copied"); } catch { toast("Couldn't copy"); } };
+$("#edDelete").onclick = async () => {
+  if (!WS.script) return;
+  await api("/api/script/delete", { project: WS.id, id: WS.script.id });
+  toast(`Deleted ${WS.script.title}`); WS.script = null;
+  await loadProject(WS.id, true);
+  if (WS.view.scripts.length) openScript(WS.view.scripts[0].id); else showNoScript();
+};
+$("#wsBack").onclick = async () => { await flushSave(); WS.open = false; $("#ws").classList.remove("open"); $("#player").pause(); if (tab === "projects") renderProjects(); };
+$("#wsDelete").onclick = async () => {
+  if (!confirmDelete()) return;
+  await api("/api/project/delete", { id: WS.id }); WS.open = false; $("#ws").classList.remove("open"); toast("Project deleted"); renderProjects();
+};
+let delArmed = 0;
+function confirmDelete() {   // no browser dialogs: press twice within 4 seconds
+  if (Date.now() - delArmed < 4000) return true;
+  delArmed = Date.now(); $("#wsDelete").textContent = "Press again to delete"; setTimeout(() => ($("#wsDelete").textContent = "Delete project"), 4000);
+  return false;
+}
+$("#wsTranscribe").onclick = async () => {
+  closeMenus();
+  try { const r = await api("/api/project/transcribe", { project: WS.id }); if (r.added) { await loadProject(WS.id, true); refresh(); toast(`Added ${r.added} clip${r.added === 1 ? "" : "s"}. They join the assistant once transcribed.`, 4000); } }
+  catch (e) { toast(e.message, 4000); }
+};
+$("#wsFromRecent").onclick = async () => {
+  closeMenus();
+  const { items } = await api("/api/recent");
+  const have = new Set(WS.view.clips.map((c) => c.path));
+  const list = items.filter((r) => r.exists && !have.has(r.path));
+  $("#pickList").innerHTML = list.length ? list.map((r) => `<label><input type="checkbox" value="${esc(r.path)}" /> <span>${esc(r.name)}</span><span class="k">${esc(ago(r.when))}</span></label>`).join("")
+    : `<div class="hint">Nothing new in Recent. Use Transcribe new clips… instead.</div>`;
+  $("#pickModal").classList.add("open"); $("#scrim").classList.add("open");
+};
+$("#pickCancel").onclick = () => closeModal("#pickModal");
+$("#pickAdd").onclick = async () => {
+  const paths = [...document.querySelectorAll("#pickList input:checked")].map((i) => i.value);
+  if (paths.length) { await api("/api/project/clips", { id: WS.id, add: paths }); await loadProject(WS.id, true); renderChat(); }
+  closeModal("#pickModal");
+};
+// workspace clicks (separate data-ws* attributes so the main window's handlers don't catch them)
+$("#ws").addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  try {
+    if (t.dataset.wsscript) openScript(t.dataset.wsscript);
+    else if (t.dataset.wsnew) { closeMenus(); await flushSave(); const s = await api("/api/script/new", { project: WS.id, type: t.dataset.wsnew }); await loadProject(WS.id, true); openScript(s.id); }
+    else if (t.dataset.wsrmclip) { await api("/api/project/clips", { id: WS.id, remove: t.dataset.wsrmclip }); await loadProject(WS.id, true); }
+    else if (t.dataset.wsstarter) sendChat(t.dataset.wsstarter);
+    else if (t.dataset.wsundo !== undefined) {
+      const u = WS.undo.pop(); if (!u) return;
+      $("#edBody").value = u.body; await flushSave(); updateStats(); WS.results = null; $("#checks").classList.remove("open");
+      markUndo(); renderChat(); toast("Undone");
+    }
+  } catch (err) { toast(err.message, 4000); }
+});
+document.addEventListener("click", (e) => { const t = e.target.closest("[data-wsopen]"); if (t) openWs(t.dataset.wsopen).catch((err) => toast(err.message)); });
+
+// ---------------- cloned voices
+function renderVoices() {
+  const v = WS.view.voices; if (!v) return;
+  const names = [...new Set([...Object.keys(v.speakers), ...Object.keys(v.cloned)])];
+  $("#wsVoices").innerHTML = names.length ? names.map((n) => {
+    const c = v.cloned[n];
+    return `<div class="voice-row"><span class="t">${esc(n)}</span>
+      <span class="k ${c ? "cloned" : ""}">${c ? "Voice cloned" + (c.needs_verification ? ", needs verifying at elevenlabs.io" : "") : `${fmtDur(v.speakers[n] || 0)} of speech`}</span>
+      <span class="acts">${c ? `<button data-vline="${esc(n)}" title="Add a generated line for ${esc(n)} at the cursor">+ Line</button><button class="quiet" data-vforget="${esc(n)}" aria-label="Remove ${esc(n)}'s cloned voice">×</button>`
+        : `<button data-vclone="${esc(n)}">Clone…</button>`}</span></div>`;
+  }).join("") : `<div class="hint" style="padding:0 8px">Name the speakers in your clips to clone a voice for pickup lines.</div>`;
+}
+let cloneName = "";
+async function openClone(name) {
+  cloneName = name;
+  $("#cloneTitle").textContent = `Clone ${name}'s voice`;
+  $("#cloneSub").textContent = "For pickup lines: a missing word, a sentence cut off, a line they approved. Uses ElevenLabs.";
+  $("#cloneAgreeText").textContent = `${name} has agreed to having their voice cloned and used for this project.`;
+  $("#cloneAgree").checked = false; $("#cloneBy").value = ""; $("#cloneNoise").checked = false; $("#cloneWarn").textContent = "";
+  $("#clonePlan").textContent = "Finding their cleanest lines…";
+  $("#cloneModal").classList.add("open"); $("#scrim").classList.add("open");
+  try {
+    const plan = await api("/api/voice/plan", { project: WS.id, name });
+    const src = plan.sources.includes("stem_dialogue") ? "dialogue stems" : plan.sources.includes("clean") ? "clean audio" : "the clips' audio";
+    $("#clonePlan").textContent = plan.enough
+      ? `Transcribe will send ${fmtDur(plan.secs)} of ${name} talking alone, in ${plan.segments} pieces from ${plan.clips} clip${plan.clips === 1 ? "" : "s"}, taken from ${src}.`
+      : `Only ${fmtDur(plan.secs)} of ${name} talking alone. Cloning needs at least 0:30. Add more of their clips.`;
+    if (!WS.view.voices.hasKey) $("#cloneWarn").textContent = "Add your ElevenLabs key in Settings first.";
+    WS.clonePlanOk = plan.enough && WS.view.voices.hasKey;
+  } catch (e) { $("#clonePlan").textContent = e.message; WS.clonePlanOk = false; }
+  cloneCheck();
+}
+function cloneCheck() { $("#cloneGo").disabled = !(WS.clonePlanOk && $("#cloneAgree").checked && $("#cloneBy").value.trim()); }
+["change", "input"].forEach((ev) => $("#cloneModal").addEventListener(ev, cloneCheck));
+$("#cloneCancel").onclick = () => closeModal("#cloneModal");
+$("#cloneGo").onclick = async () => {
+  $("#cloneGo").disabled = true; $("#cloneGo").textContent = "Cloning…";
+  try {
+    await api("/api/voice/clone", { project: WS.id, name: cloneName, agreed: $("#cloneAgree").checked, consent_by: $("#cloneBy").value, remove_noise: $("#cloneNoise").checked });
+    closeModal("#cloneModal"); toast(`${cloneName}'s voice is ready. Add a line with + Line.`, 4000);
+    await loadProject(WS.id, true); if (WS.results) runCheck(false);
+  } catch (e) { $("#cloneWarn").textContent = e.message; }
+  finally { $("#cloneGo").textContent = "Clone voice"; cloneCheck(); }
+};
+function insertLine(name) {
+  const b = $("#edBody"); if (!WS.script) { toast("Open a script first"); return; }
+  const pos = lastSel.end || b.value.length;
+  const lineStart = b.value.lastIndexOf("\n", pos - 1) + 1;
+  const atLineStart = pos === lineStart;
+  const ins = (atLineStart ? "" : "\n") + `SYNTH ${name.toUpperCase()}: ""` + "\n";
+  b.value = b.value.slice(0, pos) + ins + b.value.slice(pos);
+  const caret = pos + ins.length - 2;
+  b.focus(); b.setSelectionRange(caret, caret); scheduleSave(); updateStats();
+  toast("Type the line between the quotes, then Check bites to make it", 4000);
+}
+async function synthAction(btn) {
+  const i = Number(btn.dataset.synthsay ?? btn.dataset.synthrec ?? btn.dataset.synthshow ?? -1);
+  if (btn.dataset.synthclone) { openClone(btn.dataset.synthclone); return; }
+  const x = WS.results.results[i]; if (!x) return;
+  if (btn.dataset.synthshow !== undefined) { api("/api/open", { path: x.file, reveal: true }); return; }
+  await flushSave();
+  const label = btn.textContent; btn.disabled = true; btn.textContent = "Making…";
+  try {
+    const r = await api(btn.dataset.synthsay !== undefined ? "/api/voice/say" : "/api/voice/record", { project: WS.id, name: x.who, text: x.quote });
+    if (!r.file) return;
+    toast(`Saved ${base(r.file)}`, 3500);
+    await runCheck(false);
+    const again = WS.results.results.findIndex((y) => y.line === x.line); const pb = again >= 0 && $(`[data-chkplay="${again}"]`); if (pb) pb.click();
+    refresh().catch(() => {});
+  } catch (e) { toast(e.message, 5000); }
+  finally { btn.disabled = false; btn.textContent = label; }
+}
+$("#wsVoices").addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  try {
+    if (t.dataset.vclone) openClone(t.dataset.vclone);
+    else if (t.dataset.vline) insertLine(t.dataset.vline);
+    else if (t.dataset.vforget) {
+      if (t.dataset.armed !== "1") { t.dataset.armed = "1"; t.textContent = "Remove?"; setTimeout(() => { t.dataset.armed = ""; t.textContent = "×"; }, 4000); return; }
+      await api("/api/voice/forget", { project: WS.id, name: t.dataset.vforget }); toast("Voice removed here and at ElevenLabs. Files you made stay."); await loadProject(WS.id, true);
+    }
+  } catch (err) { toast(err.message, 4000); }
+});
+$("#wsVoiceLog").onclick = async () => {
+  closeMenus();
+  const r = await api("/api/voice/log", { project: WS.id });
+  $("#logText").textContent = r.text || "Nothing yet. Cloned voices and generated lines show up here.";
+  $("#logModal").classList.add("open"); $("#scrim").classList.add("open");
+};
+$("#wsVoiceHelp").onclick = () => {
+  closeMenus();
+  $("#logTitle").textContent = "How cloned voices work";
+  $("#logText").textContent = "1. Name the speakers in your clips (Name speakers).\n2. Under Voices, choose Clone… and record who gave permission.\n3. Choose + Line, or type a line like:\n   SYNTH AMY: \"and that's when we knew.\"\n4. Check bites lists it as SYNTHETIC. Choose Make it to generate it from the text,\n   or From my read… to pick a recording of you saying it (keeps your timing).\n5. The WAV is saved in Transcribe/Generated audio/<project>, named with SYNTHETIC.\n\nGenerated lines are never counted as soundbites, and Word exports mark them in red.";
+  $("#logModal").classList.add("open"); $("#scrim").classList.add("open");
+};
+$("#logClose").onclick = () => { closeModal("#logModal"); $("#logTitle").textContent = "Generated-voice log"; };
+$("#logCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#logText").textContent); toast("Copied"); } catch { toast("Couldn't copy"); } };
+
 refresh();
-setInterval(() => { if (tab !== "recent") refresh().catch(() => {}); }, 1000);
+setInterval(() => { if (tab !== "recent" && tab !== "projects" && !WS.open) refresh().catch(() => {}); }, 1000);
+setInterval(() => { if (WS.open) { refresh().catch(() => {}); if (WS.waiting) loadProject(WS.id, true).catch(() => {}); } }, 4000);
 </script>
 </body>
 </html>

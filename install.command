@@ -12,13 +12,14 @@ say_step() { echo; echo "==> $1"; }
 clear
 echo "Transcribe installer"
 echo "This sets up local transcription in $APP_HOME and adds a Transcribe app to your Applications folder."
-echo "It downloads about 2–3 GB the first time (Python, Whisper and speaker models)."
+echo "It downloads about 3 GB the first time (Python, Whisper, speaker and stems models)."
 echo
 read -r -p "Press Return to continue, or close this window to cancel. " _
 
 mkdir -p "$APP_HOME/app/ui" "$APP_HOME/bin" "$APP_HOME/models" "$APP_HOME/Watch Folder"
-cp "$SRC/transcribe.py" "$SRC/app.py" "$SRC/icon.png" "$APP_HOME/app/"
+cp "$SRC/transcribe.py" "$SRC/app.py" "$SRC/projects.py" "$SRC/voices.py" "$SRC/icon.png" "$APP_HOME/app/"
 cp "$SRC/ui/index.html" "$APP_HOME/app/ui/index.html"
+rm -rf "$APP_HOME/app/dnr" && cp -R "$SRC/dnr" "$APP_HOME/app/dnr"
 
 say_step "Installing uv (a self-contained Python manager) into $APP_HOME/bin"
 if [ ! -x "$APP_HOME/bin/uv" ]; then
@@ -34,7 +35,7 @@ say_step "Installing transcription libraries"
 COMMON="sherpa-onnx>=1.12,<3 av>=12 numpy python-docx certifi truststore pywebview>=5"
 if [ "$ARCH" = "arm64" ]; then
   echo "Apple Silicon Mac — using MLX Whisper (fast, uses the GPU)."
-  "$UV" pip install --python "$PY" $COMMON mlx-whisper
+  "$UV" pip install --python "$PY" $COMMON mlx-whisper deepfilternet-rs torch pyyaml
 else
   echo "Intel Mac — using faster-whisper."
   "$UV" pip install --python "$PY" $COMMON faster-whisper
@@ -48,6 +49,16 @@ if [ ! -f "$APP_HOME/models/sherpa-onnx-pyannote-segmentation-3-0/model.onnx" ];
 fi
 if [ ! -f "$APP_HOME/models/nemo_en_titanet_small.onnx" ]; then
   curl -L --fail -o "$APP_HOME/models/nemo_en_titanet_small.onnx" "$REL/speaker-recongition-models/nemo_en_titanet_small.onnx"
+fi
+
+if [ "$ARCH" = "arm64" ]; then
+  say_step "Downloading the dialogue/music/effects model (150 MB)"
+  STEMS="$APP_HOME/models/stems"; mkdir -p "$STEMS"
+  MSST="https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3"
+  [ -f "$STEMS/cfg.yaml" ] || curl -L --fail -o "$STEMS/cfg.yaml" "$MSST/config_dnr_bandit_bsrnn_multi_mus64.yaml"
+  if [ ! -f "$STEMS/bandit.chpt" ]; then
+    curl -L --fail -o "$STEMS/bandit.part" "$MSST/model_bandit_plus_dnr_sdr_11.47.chpt" && mv "$STEMS/bandit.part" "$STEMS/bandit.chpt"
+  fi
 fi
 
 say_step "Writing helper scripts"
@@ -97,8 +108,8 @@ cat > "$APP/Contents/Info.plist" <<PL
   <key>CFBundleName</key><string>Transcribe</string>
   <key>CFBundleDisplayName</key><string>Transcribe</string>
   <key>CFBundleIdentifier</key><string>local.transcribe.app</string>
-  <key>CFBundleVersion</key><string>2.1</string>
-  <key>CFBundleShortVersionString</key><string>2.1</string>
+  <key>CFBundleVersion</key><string>3.2</string>
+  <key>CFBundleShortVersionString</key><string>3.2</string>
   <key>NSHumanReadableCopyright</key><string>© 2026 TBD Media Post. Free for personal, noncommercial use.</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>Transcribe</string>
@@ -131,6 +142,15 @@ EOF
 
 say_step "Quick self-test"
 "$PY" -c "import sherpa_onnx, av, docx, certifi, truststore, webview; print('Libraries OK')"
+if [ "$ARCH" = "arm64" ]; then
+  "$PY" -I - "$APP_HOME/app" <<'STEMSTEST' || echo "⚠️  Stems didn't load. Everything else works; tell Claude (the assistant) about this message."
+import sys, importlib.util
+spec = importlib.util.spec_from_file_location("t", sys.argv[1] + "/transcribe.py"); T = importlib.util.module_from_spec(spec); spec.loader.exec_module(T)
+assert T.stems_available(), "model files missing"
+m, dev, cfg = T._stems_model()
+print(f"Stems model OK ({'GPU' if dev == 'mps' else 'CPU'})")
+STEMSTEST
+fi
 "$PY" - <<'EOF' || echo "⚠️  Couldn't reach Claude securely. Transcription still works; tell Claude (the assistant) about this message."
 import ssl, urllib.request, truststore
 try:

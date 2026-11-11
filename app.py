@@ -21,6 +21,14 @@ APP_DIR = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("transcribe", APP_DIR / "transcribe.py")
 T = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(T)
+_pspec = importlib.util.spec_from_file_location("projects", APP_DIR / "projects.py")
+P = importlib.util.module_from_spec(_pspec)
+_pspec.loader.exec_module(P)
+P.bind(T)
+_vspec = importlib.util.spec_from_file_location("voices", APP_DIR / "voices.py")
+V = importlib.util.module_from_spec(_vspec)
+_vspec.loader.exec_module(V)
+V.bind(T, P)
 
 IS_MAC = platform.system() == "Darwin"
 AGENT = "com.transcribe.watchfolder"
@@ -62,8 +70,49 @@ def _progress(stage, frac):
 T.PROGRESS_HOOK = _progress
 
 
-def enqueue(paths):
+PENDING = []          # clips dropped or picked, waiting for the "Create files" window
+PULL = {"model": "", "status": "", "frac": 0.0, "error": "", "busy": False}
+OLLAMA_CACHE = {"t": 0, "v": {"running": False, "models": []}}
+
+
+def receive(paths):
+    """Dropped or picked clips: ask what to make (unless that's turned off), else start with the defaults."""
     files = T.expand([p for p in paths if p])
+    settings = T.load_settings()
+    if settings.get("ask_outputs", True):
+        with LOCK:
+            have = set(PENDING)
+            for f in files:
+                if str(f) not in have:
+                    PENDING.append(str(f))
+        return 0, len(files)
+    return enqueue([str(f) for f in files], T.default_opts(settings))
+
+
+def clean_opts(o, settings):
+    d = T.default_opts(settings)
+    files = [f for f in (o.get("files") or []) if f in ("srt", "docx", "txt", "summary", "clean", "stems")]
+    tr = [str(t).strip() for t in (o.get("translate") or []) if str(t).strip()]
+    dest = o.get("dest") if o.get("dest") in ("beside", "subfolder", "folder") else d["dest"]
+    cleanup = o.get("cleanup") if o.get("cleanup") in T.CLEANUP_SERVICES else d["cleanup"]
+    if dest == "folder" and not o.get("dir"):
+        raise RuntimeError("Choose the folder to save into.")
+    if not files and not tr:
+        raise RuntimeError("Pick at least one thing to create.")
+    return {"files": files, "translate": tr, "dest": dest, "dir": str(o.get("dir") or ""), "cleanup": cleanup}
+
+
+def describe_opts(o):
+    names = {"srt": "captions", "docx": "Word transcript", "txt": "text transcript", "summary": "summary", "clean": "clean audio", "stems": "dialogue/music/effects stems"}
+    parts = [names[f] for f in o["files"] if f in names]
+    if o["translate"]:
+        parts.append("translation to " + ", ".join(o["translate"]))
+    return ", ".join(parts)
+
+
+def enqueue(paths, opts=None):
+    files = T.expand([p for p in paths if p])
+    opts = opts or T.default_opts(T.load_settings())
     added = 0
     with LOCK:
         active = {j["path"] for j in JOBS.values() if j["status"] in ("queued", "running")}
@@ -73,7 +122,7 @@ def enqueue(paths):
             jid = uuid.uuid4().hex[:8]
             JOBS[jid] = {"id": jid, "path": str(f), "name": f.name, "folder": str(f.parent).replace(str(Path.home()), "~", 1), "status": "queued",
                          "stage": "Waiting", "frac": 0.0, "error": "", "outputs": [], "log": [], "added": time.time(),
-                         "speakers": 0, "named": False}
+                         "speakers": 0, "named": False, "opts": opts, "plan": describe_opts(opts)}
             ORDER.append(jid)
             WORK.put(jid)
             added += 1
@@ -105,7 +154,7 @@ def run_summary(job, settings):
     st["cost_usd"] = round(st.get("cost_usd", 0) + T.CLIP_COST["usd"], 4)
     T.write_outputs(st, settings, captions=False)
     T.save_state(st)
-    outs = T.outputs_for(Path(st["media"]))
+    outs = T.outputs_for(Path(st["media"]), None, st.get("out"))
     with LOCK:
         job.update(status="done", stage="Summary ready", frac=1.0, has_summary=True,
                    outputs=[str(outs[k]) for k in ("sum_docx", "docx") if outs[k].exists()])
@@ -124,7 +173,7 @@ def run_translation(job, settings):
     T.write_outputs(st, settings, captions=False)
     T.save_state(st)
     code = T.lang_code(job["target"])
-    outs = T.outputs_for(Path(st["media"]), [code])
+    outs = T.outputs_for(Path(st["media"]), [code], st.get("out"))
     with LOCK:
         job.update(status="done", stage=f"Translated to {job['target']}", frac=1.0,
                    outputs=[str(outs[k]) for k in (f"docx_{code}", f"srt_{code}", f"txt_{code}") if outs[k].exists()])
@@ -155,7 +204,7 @@ def worker():
                     CURRENT["id"] = None
             continue
         try:
-            st = T.process(Path(job["path"]), settings)
+            st = T.process(Path(job["path"]), settings, job.get("opts"))
             with LOCK:
                 if st:
                     job["has_summary"] = bool(st.get("summary"))
@@ -208,6 +257,45 @@ def has_key():
     return bool(T.get_api_key() or TEST_KEY["k"])
 
 
+KEY_RULES = {"claude": ("sk-ant-", "a Claude API key (it starts with sk-ant-)"),
+             "elevenlabs": ("", "an ElevenLabs API key"), "auphonic": ("", "an Auphonic API key"),
+             "aicoustics": ("", "an ai-coustics API key")}
+
+
+def keys_state():
+    return {k: bool(T.get_secret(k)) for k in T.SECRET_SERVICES}
+
+
+def ollama_state(force=False):
+    settings = T.load_settings()
+    if force or time.time() - OLLAMA_CACHE["t"] > 5:
+        OLLAMA_CACHE["v"] = T.ollama_status(settings)
+        OLLAMA_CACHE["t"] = time.time()
+    v = dict(OLLAMA_CACHE["v"])
+    want = settings.get("local_model") or "qwen2.5:7b"
+    v["hasModel"] = any(n == want or n.split(":")[0] == want for n in v["models"])
+    v["pull"] = dict(PULL)
+    v["choices"] = T.LOCAL_MODELS
+    return v
+
+
+def start_pull(model):
+    if PULL["busy"]:
+        raise RuntimeError("A model is already downloading.")
+    PULL.update(model=model, status="Starting", frac=0.0, error="", busy=True)
+
+    def run():
+        try:
+            T.ollama_pull(T.load_settings(), model, lambda st, f: PULL.update(status=st, frac=f))
+            PULL.update(status="Ready", frac=1.0)
+        except Exception as e:
+            PULL.update(error=str(e) if "URLError" not in type(e).__name__ else "Ollama isn't running. Open the Ollama app first.")
+        finally:
+            PULL["busy"] = False
+            OLLAMA_CACHE["t"] = 0
+    threading.Thread(target=run, daemon=True).start()
+
+
 def save_key(k):
     if IS_MAC:
         r = subprocess.run(["security", "add-generic-password", "-U", "-s", T.KEYCHAIN_SERVICE, "-a", "Transcribe", "-w", k],
@@ -235,7 +323,9 @@ def write_settings(changes):
     for k, v in changes.items():
         if k in T.DEFAULTS:
             d = T.DEFAULTS[k]
-            if isinstance(d, bool):
+            if isinstance(d, list):
+                v = [str(x) for x in (v if isinstance(v, list) else str(v).split(",")) if str(x).strip()]
+            elif isinstance(d, bool):
                 v = bool(v)
             elif isinstance(d, (int, float)):
                 v = type(d)(v)
@@ -325,7 +415,7 @@ def pick(kind):
     if not w:
         raise RuntimeError("File picker is only available in the app window.")
     import webview
-    if kind == "folder":
+    if kind in ("folder", "dest"):
         r = w.create_file_dialog(webview.FileDialog.FOLDER)
     else:
         r = w.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True)
@@ -335,6 +425,86 @@ def pick(kind):
 def open_path(path, reveal=False):
     if IS_MAC:
         subprocess.run(["open", "-R", path] if reveal else ["open", path])
+
+
+# ---------------------------------------------------------------- projects and scripts
+def project_api(path, b):
+    pid = b.get("project") or b.get("id") if path.startswith("/api/project") else b.get("project")
+    if path == "/api/project/create":
+        return P.create(b.get("name", ""))
+    if path == "/api/project/update":
+        return P.update(pid, b.get("name"), b.get("notes"))
+    if path == "/api/project/delete":
+        P.remove(pid)
+        return {"ok": True}
+    if path == "/api/project/clips":
+        if b.get("remove"):
+            P.remove_clip(pid, b["remove"])
+        if b.get("add"):
+            P.add_clips(pid, [str(f) for f in T.expand(b["add"])])
+        return P.project_view(pid)
+    if path == "/api/project/transcribe":
+        # pick new clips: they join the project now and go through "Create files" like any drop
+        files = [str(f) for f in T.expand(pick("files"))]
+        if files:
+            P.add_clips(pid, files)
+            receive(files)
+        return {"added": len(files)}
+    if path == "/api/script/new":
+        return P.new_script(pid, b.get("type", "free"), b.get("title", ""))
+    if path == "/api/script/save":
+        return P.save_script(pid, b["id"], b.get("title"), b.get("body"), b.get("type"))
+    if path == "/api/script/delete":
+        P.delete_script(pid, b["id"])
+        return {"ok": True}
+    if path == "/api/script/clearchat":
+        P.clear_chat(pid, b["id"])
+        return {"ok": True}
+    if path == "/api/script/chat":
+        return P.chat(pid, b["id"], b.get("message", ""), b.get("selection", ""))
+    if path == "/api/script/check":
+        res = checked(pid, b.get("body", ""))
+        return {"results": res, "stats": P.stats(b.get("body", ""), res)}
+    if path == "/api/script/fix":
+        body = P.apply_fixes(b.get("body", ""), P.check(pid, b.get("body", "")))
+        res = checked(pid, body)
+        return {"body": body, "results": res, "stats": P.stats(body, res)}
+    if path == "/api/script/export":
+        folder = b.get("dir") or (pick("dest") or [""])[0]
+        if not folder:
+            return {"path": ""}
+        out = P.export_docx(pid, b["id"], folder)
+        return {"path": out}
+    raise RuntimeError("Unknown request.")
+
+
+def checked(pid, body):
+    """Soundbite checks plus generated-voice lines, in script order."""
+    res = P.check(pid, body) + V.check_lines(P.load(pid), body)
+    return sorted(res, key=lambda r: r["line"])
+
+
+def voice_api(path, b):
+    pid, name = b.get("project"), b.get("name", "")
+    if path == "/api/voice/plan":
+        return V.sample_plan(pid, name)
+    if path == "/api/voice/clone":
+        if not b.get("agreed"):
+            raise RuntimeError("Confirm that you have permission to clone this voice.")
+        return V.clone(pid, name, b.get("consent_by", ""), b.get("consent_note", ""), bool(b.get("remove_noise")))
+    if path == "/api/voice/forget":
+        V.forget(pid, name)
+        return {"ok": True}
+    if path == "/api/voice/say":
+        return V.say(pid, V.canonical(P.load(pid), name), b.get("text", ""))
+    if path == "/api/voice/record":
+        got = b.get("file") or (pick("files") or [""])[0]
+        if not got:
+            return {"file": ""}
+        return V.say_like(pid, V.canonical(P.load(pid), name), b.get("text", ""), got)
+    if path == "/api/voice/log":
+        return {"text": V.log_text(P.load(pid))}
+    raise RuntimeError("Unknown request.")
 
 
 # ---------------------------------------------------------------- HTTP API
@@ -373,9 +543,29 @@ class Handler(BaseHTTPRequestHandler):
                     "jobs": jobs, "settings": T.load_settings(), "watch": watch_on(), "hasKey": has_key(),
                     "names": names, "engine": T.engine_name(), "isMac": IS_MAC,
                     "watchDir": str(T.WATCH_DIR), "log": LOG_LINES[-80:], "usage": T.usage_summary(),
+                    "pending": [{"path": x, "name": Path(x).name} for x in PENDING],
+                    "defaults": T.default_opts(T.load_settings()), "keys": keys_state(),
+                    "cleanupServices": T.CLEANUP_SERVICES, "localCleanup": T.local_cleanup_available(), "stems": T.stems_available(),
+                    "ollama": ollama_state(),
                 })
             if u.path == "/api/recent":
                 return self._send(200, {"items": recent()})
+            if u.path == "/api/projects":
+                return self._send(200, {"items": P.list_projects(), "types": P.SCRIPT_TYPES})
+            if u.path == "/api/project":
+                v = P.project_view(q.get("id", ""))
+                pr = P.load(v["id"])
+                v["voices"] = {"speakers": V.speakers(pr), "cloned": pr.get("voices", {}), "hasKey": bool(T.get_secret("elevenlabs"))}
+                return self._send(200, v)
+            if u.path == "/api/audio":   # play a generated line (only files Transcribe made)
+                f = Path(q.get("path", "")).resolve()
+                if f.suffix.lower() != ".wav" or T.HOME.resolve() not in f.parents and not f.name.count(" - SYNTHETIC - "):
+                    return self._send(403, {"error": "not allowed"})
+                return self._send(200, f.read_bytes(), "audio/wav")
+            if u.path == "/api/script":
+                pr = P.load(q.get("project", ""))
+                s = P._script(pr, q.get("id", ""))
+                return self._send(200, dict(s, project=pr["id"]))
             if u.path == "/api/speakers":
                 v = speakers_view(q.get("path", ""))
                 return self._send(200 if v else 404, v or {"error": "No saved data for that clip."})
@@ -384,7 +574,7 @@ class Handler(BaseHTTPRequestHandler):
                 v = T.summary_view(st) if st else None
                 if not v:
                     return self._send(404, {"error": "No summary for that clip yet."})
-                outs = T.outputs_for(Path(st["media"]))
+                outs = T.outputs_for(Path(st["media"]), None, st.get("out"))
                 return self._send(200, dict(v, name=Path(st["media"]).name, media=st["media"],
                                             doc=str(outs["sum_docx"]) if outs["sum_docx"].exists() else ""))
             if u.path == "/api/snippet":
@@ -399,24 +589,73 @@ class Handler(BaseHTTPRequestHandler):
         try:
             b = self._body()
             if u.path == "/api/add":
-                added, found = enqueue(b.get("paths", []))
-                return self._send(200, {"added": added, "found": found})
+                added, found = receive(b.get("paths", []))
+                return self._send(200, {"added": added, "found": found, "pending": len(PENDING)})
             if u.path == "/api/pick":
-                added, found = enqueue(pick(b.get("kind", "files")))
+                if b.get("kind") == "dest":
+                    got = pick("dest")
+                    return self._send(200, {"dir": got[0] if got else ""})
+                added, found = receive(pick(b.get("kind", "files")))
+                return self._send(200, {"added": added, "found": found, "pending": len(PENDING)})
+            if u.path == "/api/start":
+                settings = T.load_settings()
+                opts = clean_opts(b.get("opts") or {}, settings)
+                if b.get("remember"):
+                    write_settings({"outputs": opts["files"], "dest": opts["dest"], "dest_dir": opts["dir"],
+                                    "audio_cleanup": opts["cleanup"], "translate_to": ", ".join(opts["translate"])})
+                if b.get("dontAsk") is not None:
+                    write_settings({"ask_outputs": not bool(b.get("dontAsk"))})
+                if b.get("defaultsOnly"):
+                    return self._send(200, {"ok": True})
+                with LOCK:
+                    paths = list(PENDING); PENDING.clear()
+                added, found = enqueue(paths, opts)
                 return self._send(200, {"added": added, "found": found})
+            if u.path.startswith("/api/voice/"):
+                return self._send(200, voice_api(u.path, b))
+            if u.path.startswith("/api/project") or u.path.startswith("/api/script"):
+                return self._send(200, project_api(u.path, b))
+            if u.path == "/api/pending/clear":
+                with LOCK:
+                    PENDING.clear()
+                return self._send(200, {"ok": True})
+            if u.path == "/api/secret":
+                svc = b.get("service")
+                if svc not in T.SECRET_SERVICES:
+                    return self._send(400, {"error": "Unknown service."})
+                k = str(b.get("key", "")).strip()
+                prefix, what = KEY_RULES[svc]
+                if len(k) < 12 or not k.startswith(prefix):
+                    return self._send(400, {"error": f"That doesn't look like {what}."})
+                T.set_secret(svc, k)
+                if svc == "claude":
+                    TEST_KEY["k"] = k
+                return self._send(200, {"ok": True})
+            if u.path == "/api/secret/delete":
+                svc = b.get("service")
+                if svc in T.SECRET_SERVICES:
+                    T.delete_secret(svc)
+                    if svc == "claude":
+                        TEST_KEY["k"] = ""
+                return self._send(200, {"ok": True})
+            if u.path == "/api/ollama/refresh":
+                return self._send(200, ollama_state(force=True))
+            if u.path == "/api/ollama/pull":
+                start_pull(str(b.get("model") or T.load_settings().get("local_model")))
+                return self._send(200, {"ok": True})
             if u.path == "/api/translate":
                 langs = [l for l in b.get("langs", []) if str(l).strip()]
                 if not langs:
                     return self._send(400, {"error": "Pick a language."})
-                if not has_key():
-                    return self._send(400, {"error": "Translation needs your Claude API key. Add it in Settings."})
+                if not T.ai_ready(T.load_settings()):
+                    return self._send(400, {"error": f"Translation needs AI, but {T.ai_not_ready_reason(T.load_settings())}. Check Settings."})
                 for path in b.get("paths", []):
                     for lang in langs:
                         enqueue_translation(path, str(lang))
                 return self._send(200, {"ok": True})
             if u.path == "/api/summarize":
-                if not has_key():
-                    return self._send(400, {"error": "Summaries need your Claude API key. Add it in Settings."})
+                if not T.ai_ready(T.load_settings()):
+                    return self._send(400, {"error": f"Summaries need AI, but {T.ai_not_ready_reason(T.load_settings())}. Check Settings."})
                 for path in b.get("paths", []):
                     enqueue_translation(path, "", kind="summarize")
                 return self._send(200, {"ok": True})
@@ -449,7 +688,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     j = JOBS.get(b.get("id"))
                 if j:
-                    enqueue([j["path"]])
+                    enqueue([j["path"]], j.get("opts"))
                 return self._send(200, {"ok": True})
             if u.path == "/api/clear":
                 with LOCK:
@@ -502,14 +741,14 @@ def main(argv):
 
     def on_drop(e):
         files = (e.get("dataTransfer") or {}).get("files") or []
-        enqueue([f.get("pywebviewFullPath") for f in files])
+        receive([f.get("pywebviewFullPath") for f in files])
 
     def bind(w):
         w.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True, debounce=500)
         w.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
         # files passed on the command line (e.g. dropped on the Dock icon)
         if len(argv) > 0:
-            enqueue(argv)
+            receive(argv)
 
     icon = APP_DIR / "icon.png"
     webview.start(bind, window, icon=str(icon) if icon.exists() else None)
