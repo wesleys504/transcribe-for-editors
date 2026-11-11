@@ -13,6 +13,7 @@ Usage:
   transcribe.py FILE_OR_FOLDER [...]     transcribe these
   transcribe.py --watch                  process new files in the watch folder (used by the watch-folder agent)
 """
+import io
 import json
 import os
 import platform
@@ -46,7 +47,19 @@ DEFAULTS = {
     "claude_model": "claude-sonnet-5-5",
     "ask_speaker_names": True,      # ask in Terminal who each speaker is
     "translate_to": "",             # e.g. "English" — also writes translated captions + transcript
-    "summary": True,                # Claude writes a summary, topics and best soundbites (needs API key)
+    "summary": True,                # (older setting, folded into "outputs")
+    # --- what to make, and where (the app asks per batch unless ask_outputs is off)
+    "outputs": ["srt", "docx", "summary"],   # any of: srt, docx, txt, summary, clean
+    "dest": "beside",               # beside | subfolder | folder
+    "dest_dir": "",                 # used when dest == "folder"
+    "ask_outputs": True,
+    # --- audio cleanup
+    "audio_cleanup": "local",       # local | elevenlabs | auphonic | aicoustics
+    "transcribe_cleaned": True,     # transcribe from the cleaned audio when cleaning
+    # --- which AI does name fixes, summaries and translation
+    "ai_provider": "claude",        # claude | local
+    "local_model": "qwen2.5:7b",
+    "ollama_url": "http://127.0.0.1:11434",
     "max_chars_per_line": 42,
     "max_lines": 2,
     "max_caption_seconds": 6.0,
@@ -93,6 +106,42 @@ def notify(title, text):
         return
     t = text.replace('"', "'")
     subprocess.run(["osascript", "-e", f'display notification "{t}" with title "{title}"'], capture_output=True)
+
+
+SECRET_SERVICES = {
+    "claude": ("Transcribe-Claude-API-Key", "ANTHROPIC_API_KEY"),
+    "elevenlabs": ("Transcribe-ElevenLabs-API-Key", "ELEVENLABS_API_KEY"),
+    "auphonic": ("Transcribe-Auphonic-API-Key", "AUPHONIC_API_KEY"),
+    "aicoustics": ("Transcribe-aicoustics-API-Key", "AICOUSTICS_API_KEY"),
+}
+
+
+def get_secret(name):
+    service, env = SECRET_SERVICES[name]
+    if os.environ.get(env):
+        return os.environ[env].strip()
+    if platform.system() != "Darwin":
+        return ""
+    r = subprocess.run(["security", "find-generic-password", "-s", service, "-w"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def set_secret(name, value):
+    service, env = SECRET_SERVICES[name]
+    if platform.system() != "Darwin":
+        os.environ[env] = value
+        return
+    r = subprocess.run(["security", "add-generic-password", "-U", "-s", service, "-a", "Transcribe", "-w", value],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip() or "Keychain refused the key")
+
+
+def delete_secret(name):
+    service, env = SECRET_SERVICES[name]
+    os.environ.pop(env, None)
+    if platform.system() == "Darwin":
+        subprocess.run(["security", "delete-generic-password", "-s", service], capture_output=True)
 
 
 def get_api_key():
@@ -429,6 +478,385 @@ def _ssl_context():
         return ssl.create_default_context()
 
 
+
+# ---------------------------------------------------------------- small HTTP helpers
+def _multipart(fields, files):
+    """fields: {name: str}; files: {name: (filename, bytes, content_type)} -> (body, content_type)"""
+    import uuid as _uuid
+    boundary = "----transcribe" + _uuid.uuid4().hex
+    out = io.BytesIO()
+    for k, v in fields.items():
+        out.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+    for k, (fname, data, ctype) in files.items():
+        out.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"; filename=\"{fname}\"\r\nContent-Type: {ctype}\r\n\r\n".encode())
+        out.write(data)
+        out.write(b"\r\n")
+    out.write(f"--{boundary}--\r\n".encode())
+    return out.getvalue(), f"multipart/form-data; boundary={boundary}"
+
+
+def http(method, url, headers=None, data=None, timeout=600, tls=True):
+    """Returns (status, body bytes, content-type). Raises RuntimeError with the service's message on HTTP errors."""
+    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+    ctx = _ssl_context() if tls and url.startswith("https") else None
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            return r.status, r.read(), r.headers.get("Content-Type", "")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:400]
+        raise ServiceError(e.code, body)
+
+
+class ServiceError(RuntimeError):
+    def __init__(self, code, body):
+        super().__init__(f"HTTP {code}: {body}")
+        self.code, self.body = code, body
+
+
+# ---------------------------------------------------------------- free local AI (Ollama)
+LOCAL_MODELS = {
+    "qwen2.5:7b": "Qwen 2.5 7B (better; needs 16 GB of memory, 4.7 GB download)",
+    "qwen2.5:3b": "Qwen 2.5 3B (faster; fine with 8 GB of memory, 1.9 GB download)",
+}
+
+
+def ollama_url(settings):
+    return (settings.get("ollama_url") or "http://127.0.0.1:11434").rstrip("/")
+
+
+def ollama_status(settings):
+    try:
+        _, body, _ = http("GET", ollama_url(settings) + "/api/tags", timeout=4)
+        names = [m.get("name", "") for m in json.loads(body).get("models", [])]
+        return {"running": True, "models": names}
+    except Exception:
+        return {"running": False, "models": []}
+
+
+def ollama_has_model(settings):
+    st = ollama_status(settings)
+    want = settings.get("local_model") or "qwen2.5:7b"
+    return st["running"] and any(n == want or n.split(":")[0] == want for n in st["models"])
+
+
+def ollama_pull(settings, model, on_progress=None):
+    """Download a model through Ollama, reporting 0..1 progress."""
+    req = urllib.request.Request(ollama_url(settings) + "/api/pull", method="POST",
+                                 data=json.dumps({"model": model, "stream": True}).encode(),
+                                 headers={"content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=7200) as r:
+        for line in r:
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            if ev.get("error"):
+                raise RuntimeError(ev["error"])
+            if on_progress and ev.get("total"):
+                on_progress(ev.get("status", ""), (ev.get("completed") or 0) / ev["total"])
+            if ev.get("status") == "success":
+                return True
+    return True
+
+
+def ollama_json(settings, system, text, schema, lead):
+    body = {
+        "model": settings.get("local_model") or "qwen2.5:7b",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": lead + "\n\n" + text + "\n\nReply only with JSON that matches this schema:\n" + json.dumps(schema)},
+        ],
+        "format": schema, "stream": False,
+        "options": {"temperature": 0, "num_ctx": 16384},
+    }
+    try:
+        _, raw, _ = http("POST", ollama_url(settings) + "/api/chat", {"content-type": "application/json"},
+                         json.dumps(body).encode(), timeout=3600)
+    except ServiceError as e:
+        if e.code == 404:
+            raise RuntimeError(f"The local model {body['model']} isn't downloaded yet. Download it in Settings.")
+        raise
+    except urllib.error.URLError:
+        raise RuntimeError("Ollama isn't running. Open the Ollama app, then try again.")
+    content = json.loads(raw).get("message", {}).get("content", "")
+    try:
+        return json.loads(content)
+    except ValueError:
+        m = re.search(r"\{.*\}", content, re.S)  # small models sometimes wrap the JSON
+        if m:
+            return json.loads(m.group(0))
+        raise RuntimeError("The local model returned something that wasn't valid JSON.")
+
+
+def ai_provider(settings):
+    return "local" if settings.get("ai_provider") == "local" else "claude"
+
+
+def ai_ready(settings):
+    return ollama_has_model(settings) if ai_provider(settings) == "local" else bool(get_api_key())
+
+
+def ai_not_ready_reason(settings):
+    if ai_provider(settings) == "local":
+        st = ollama_status(settings)
+        if not st["running"]:
+            return "Ollama isn't running (or isn't installed)"
+        return f"the local model {settings.get('local_model')} isn't downloaded"
+    return "no Claude API key is saved"
+
+
+def ai_chunk(settings, claude_chars):
+    return claude_chars if ai_provider(settings) == "claude" else min(claude_chars, 5000)
+
+
+def ai_json(settings, system, text, schema, lead):
+    """Ask the chosen AI (Claude or the free local model) for JSON matching `schema`."""
+    if ai_provider(settings) == "local":
+        log(f"  local model {settings.get('local_model')} (free, on this Mac)…")
+        return ollama_json(settings, system, text, schema, lead)
+    key = get_api_key()
+    if not key:
+        raise RuntimeError("no Claude API key is saved")
+    out, _ = claude_call(key, settings["claude_model"], system, text, schema=schema, lead=lead)
+    return out
+
+
+# ---------------------------------------------------------------- audio cleanup
+CLEAN_SR = 48000
+CLEANUP_SERVICES = {
+    "local": "On this Mac (free)",
+    "elevenlabs": "ElevenLabs Voice Isolator",
+    "auphonic": "Auphonic",
+    "aicoustics": "ai-coustics",
+}
+SERVICE_URLS = {
+    "elevenlabs": os.environ.get("TRANSCRIBE_ELEVENLABS_URL", "https://api.elevenlabs.io"),
+    "auphonic": os.environ.get("TRANSCRIBE_AUPHONIC_URL", "https://auphonic.com"),
+    "aicoustics": os.environ.get("TRANSCRIBE_AICOUSTICS_URL", "https://api.ai-coustics.io"),
+}
+CHUNK_MINUTES = {"elevenlabs": 30, "auphonic": 60, "aicoustics": 60}
+
+
+def local_cleanup_available():
+    try:
+        import deepfilternet_rs  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def load_audio_at(path, rate):
+    import av
+    import numpy as np
+    chunks = []
+    with av.open(str(path)) as c:
+        if not c.streams.audio:
+            raise NoAudio("no audio track")
+        res = av.AudioResampler(format="flt", layout="mono", rate=rate)
+        for frame in c.decode(c.streams.audio[0]):
+            for out in res.resample(frame):
+                chunks.append(out.to_ndarray().reshape(-1))
+        for out in res.resample(None):
+            chunks.append(out.to_ndarray().reshape(-1))
+    if not chunks:
+        raise NoAudio("audio track is empty")
+    return np.concatenate(chunks).astype(np.float32)
+
+
+def _decode_bytes(data, rate=CLEAN_SR):
+    import av
+    import numpy as np
+    chunks = []
+    with av.open(io.BytesIO(data)) as c:
+        res = av.AudioResampler(format="flt", layout="mono", rate=rate)
+        for frame in c.decode(c.streams.audio[0]):
+            for out in res.resample(frame):
+                chunks.append(out.to_ndarray().reshape(-1))
+        for out in res.resample(None):
+            chunks.append(out.to_ndarray().reshape(-1))
+    return np.concatenate(chunks).astype(np.float32) if chunks else np.zeros(0, np.float32)
+
+
+def _encode_flac(samples, rate=CLEAN_SR):
+    import av
+    import numpy as np
+    buf = io.BytesIO()
+    pcm = (np.clip(samples, -1, 1) * 32767).astype(np.int16)
+    with av.open(buf, "w", format="flac") as c:
+        st = c.add_stream("flac", rate=rate, layout="mono")
+        step = rate  # one second per frame
+        for i in range(0, len(pcm), step):
+            fr = av.AudioFrame.from_ndarray(pcm[i:i + step].reshape(1, -1), format="s16", layout="mono")
+            fr.sample_rate = rate
+            for pkt in st.encode(fr):
+                c.mux(pkt)
+        for pkt in st.encode(None):
+            c.mux(pkt)
+    return buf.getvalue()
+
+
+def _fit(x, n):
+    import numpy as np
+    return x[:n] if len(x) >= n else np.concatenate([x, np.zeros(n - len(x), np.float32)])
+
+
+def write_wav(path, samples, rate=CLEAN_SR):
+    import numpy as np
+    import wave as _wave
+    pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2")
+    with _wave.open(str(path), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+
+
+def _clean_local(x):
+    import numpy as np
+    import deepfilternet_rs
+    p = deepfilternet_rs.DeepFilterNetRealtime(model_path=None)
+    fl = p.frame_length
+    n = len(x)
+    padded = np.concatenate([x, np.zeros((-n) % fl, np.float32)])
+    outs, step = [], fl * 100
+    for i in range(0, len(padded), step):
+        outs.append(np.asarray(p.process_chunk(padded[i:i + step]), np.float32))
+        if i % (step * 60) == 0:
+            progress("Cleaning audio on this Mac", 0.02 + 0.2 * i / max(len(padded), 1))
+    outs.append(np.asarray(p.finalize(), np.float32))
+    try:
+        p.close()
+    except Exception:
+        pass
+    return _fit(np.concatenate(outs), n)
+
+
+def _clean_elevenlabs(flac, key):
+    body, ctype = _multipart({}, {"audio": ("audio.flac", flac, "audio/flac")})
+    try:
+        _, out, _ = http("POST", SERVICE_URLS["elevenlabs"] + "/v1/audio-isolation",
+                         {"xi-api-key": key, "Content-Type": ctype}, body, timeout=3600)
+    except ServiceError as e:
+        if e.code == 401:
+            raise RuntimeError("ElevenLabs rejected the API key. Check it in Settings.")
+        if "quota" in e.body.lower() or e.code == 402:
+            raise RuntimeError("Your ElevenLabs account is out of credits.")
+        raise RuntimeError(f"ElevenLabs error {e.code}: {e.body[:200]}")
+    return out
+
+
+def _clean_auphonic(flac, key, title):
+    base = SERVICE_URLS["auphonic"]
+    auth = {"Authorization": f"bearer {key}"}
+    spec = {
+        "metadata": {"title": title}, "output_basename": "transcribe-clean",
+        "output_files": [{"format": "wav"}],
+        "algorithms": {"filtering": True, "leveler": True, "normloudness": True, "loudnesstarget": -23,
+                       "denoise": True, "denoisemethod": "dynamic", "denoiseamount": 0},
+    }
+    try:
+        _, raw, _ = http("POST", base + "/api/productions.json", dict(auth, **{"Content-Type": "application/json"}), json.dumps(spec).encode())
+        uuid = json.loads(raw)["data"]["uuid"]
+        body, ctype = _multipart({}, {"input_file": ("audio.flac", flac, "audio/flac")})
+        http("POST", f"{base}/api/production/{uuid}/upload.json", dict(auth, **{"Content-Type": ctype}), body, timeout=3600)
+        http("POST", f"{base}/api/production/{uuid}/start.json", auth, b"")
+    except ServiceError as e:
+        if e.code in (401, 403):
+            raise RuntimeError("Auphonic rejected the API key. Check it in Settings.")
+        raise RuntimeError(f"Auphonic error {e.code}: {e.body[:200]}")
+    t0 = time.time()
+    while time.time() - t0 < 3 * 3600:
+        _, raw, _ = http("GET", f"{base}/api/production/{uuid}.json", auth)
+        d = json.loads(raw)["data"]
+        status, label = d.get("status"), str(d.get("status_string", ""))
+        if status == 3 or label.lower() == "done":
+            url = d["output_files"][0]["download_url"]
+            sep = "&" if "?" in url else "?"
+            _, out, _ = http("GET", f"{url}{sep}bearer_token={key}", timeout=3600)
+            return out
+        if status == 2 or "error" in label.lower() or d.get("error_message"):
+            raise RuntimeError(f"Auphonic couldn't process it: {d.get('error_message') or label}")
+        time.sleep(5)
+    raise RuntimeError("Auphonic took too long; check your Auphonic dashboard.")
+
+
+def _clean_aicoustics(flac, key):
+    base = SERVICE_URLS["aicoustics"]
+    auth = {"X-API-Key": key}
+    settings_json = json.dumps({"loudness_target": -23, "true_peak": -1, "enhancement_level": 100,
+                                "enhancement_model": "LARK_V2", "transcode": "WAV"})
+    body, ctype = _multipart({"media_enhancement": settings_json}, {"file": ("audio.flac", flac, "audio/flac")})
+    try:
+        _, raw, _ = http("POST", base + "/v2/medias", dict(auth, **{"Content-Type": ctype}), body, timeout=3600)
+    except ServiceError as e:
+        if e.code in (401, 403):
+            raise RuntimeError("ai-coustics rejected the API key. Check it in Settings.")
+        raise RuntimeError(f"ai-coustics error {e.code}: {e.body[:200]}")
+    uid = json.loads(raw)["uid"]
+    t0 = time.time()
+    while time.time() - t0 < 3 * 3600:
+        _, raw, _ = http("GET", f"{base}/v2/medias/{uid}/metadata", auth)
+        status = str(json.loads(raw).get("enhancement_status", "")).upper()
+        if status == "COMPLETED":
+            _, out, _ = http("GET", f"{base}/v2/medias/{uid}/file", auth, timeout=3600)
+            return out
+        if status in ("FAILED", "ERROR", "CANCELLED"):
+            raise RuntimeError("ai-coustics couldn't process it.")
+        time.sleep(4)
+    raise RuntimeError("ai-coustics took too long; check your ai-coustics dashboard.")
+
+
+def clean_audio(media, service):
+    """Returns cleaned 48 kHz mono audio, exactly as long as the original (keeps sync with the video)."""
+    import numpy as np
+    if service not in CLEANUP_SERVICES:
+        raise RuntimeError(f"unknown cleanup service {service}")
+    progress("Reading audio for cleanup", 0.02)
+    x = load_audio_at(media, CLEAN_SR)
+    minutes = len(x) / CLEAN_SR / 60
+    if service == "local":
+        if not local_cleanup_available():
+            raise RuntimeError("free on-Mac cleanup needs an Apple Silicon Mac")
+        log(f"  cleaning audio on this Mac ({minutes:.1f} min)…")
+        y = _clean_local(x)
+    else:
+        key = get_secret(service)
+        if not key:
+            raise RuntimeError(f"no {CLEANUP_SERVICES[service]} API key is saved (add it in Settings)")
+        step = CHUNK_MINUTES[service] * 60 * CLEAN_SR
+        parts = []
+        nparts = max(1, -(-len(x) // step))
+        for k, i in enumerate(range(0, len(x), step)):
+            chunk = x[i:i + step]
+            progress(f"Cleaning audio with {CLEANUP_SERVICES[service]}" + (f" (part {k + 1} of {nparts})" if nparts > 1 else ""),
+                     0.02 + 0.2 * k / nparts)
+            log(f"  sending audio to {CLEANUP_SERVICES[service]}" + (f", part {k + 1} of {nparts}" if nparts > 1 else "") + "…")
+            flac = _encode_flac(chunk)
+            if service == "elevenlabs":
+                out = _clean_elevenlabs(flac, key)
+            elif service == "auphonic":
+                out = _clean_auphonic(flac, key, f"{Path(media).stem} part {k + 1}")
+            else:
+                out = _clean_aicoustics(flac, key)
+            parts.append(_fit(_decode_bytes(out), len(chunk)))
+        y = np.concatenate(parts)
+    record_service_usage(service, minutes)
+    return y
+
+
+def record_service_usage(service, minutes):
+    try:
+        data = json.loads(USAGE_FILE.read_text())
+    except (OSError, ValueError):
+        data = {}
+    month = time.strftime("%Y-%m")
+    m = data.setdefault(month, {"usd": 0.0, "input_tokens": 0, "output_tokens": 0, "requests": 0})
+    sv = m.setdefault("services", {})
+    sv[service] = round(sv.get(service, 0) + minutes, 2)
+    try:
+        USAGE_FILE.write_text(json.dumps(data, indent=2))
+    except OSError:
+        pass
+
+
 # Prices per million tokens (USD), from platform.claude.com/docs/en/about-claude/pricing (Nov 2026).
 PRICES = {
     "claude-sonnet-5-5": (2.00, 10.00),
@@ -473,7 +901,7 @@ def usage_summary():
     except (OSError, ValueError):
         data = {}
     month = time.strftime("%Y-%m")
-    return {"month": month, "this_month": data.get(month, {"usd": 0.0, "input_tokens": 0, "output_tokens": 0, "requests": 0}),
+    return {"month": month, "this_month": dict({"usd": 0.0, "input_tokens": 0, "output_tokens": 0, "requests": 0, "services": {}}, **data.get(month, {})),
             "all_time_usd": sum(v.get("usd", 0) for v in data.values())}
 
 
@@ -549,14 +977,14 @@ def apply_word_fix(words, idxs, original, replacement):
 
 
 def claude_cleanup(words, paras, names, settings, labels):
-    key = get_api_key()
-    if not key:
-        log("No Claude API key saved — skipping cleanup.")
+    if not ai_ready(settings):
+        log(f"  Skipping name fixes: {ai_not_ready_reason(settings)}.")
         return words, paras, labels, 0
+    limit = ai_chunk(settings, 12000)
     lines, chunks, size = [], [], 0
     for i, p in enumerate(paras):
         ln = f"{i} | {labels.get(p['speaker'], 'Speaker')} | {para_text(words, p)}"
-        if size + len(ln) > 12000 and lines:
+        if size + len(ln) > limit and lines:
             chunks.append("\n".join(lines)); lines, size = [], 0
         lines.append(ln); size += len(ln) + 1
     if lines:
@@ -566,7 +994,7 @@ def claude_cleanup(words, paras, names, settings, labels):
     for n, ch in enumerate(chunks):
         if len(chunks) > 1:
             log(f"  Claude cleanup, part {n + 1} of {len(chunks)}…")
-        out, _usage = claude_call(key, settings["claude_model"], claude_system(names), ch)
+        out = ai_json(settings, claude_system(names), ch, FIX_SCHEMA, "Proofread these lines:")
         fixes += out.get("fixes", [])
         for s in out.get("speakers", []):
             speaker_names[s["label"]] = s["name"].strip()
@@ -630,9 +1058,9 @@ def lang_code(name):
 
 def translate_items(texts, target, source, names, settings, kind):
     """Translate a list of strings with Claude, keeping one output per input."""
-    key = get_api_key()
-    if not key:
-        raise RuntimeError("translation needs a Claude API key")
+    if not ai_ready(settings):
+        raise RuntimeError(f"translation needs AI: {ai_not_ready_reason(settings)}")
+    limit = ai_chunk(settings, 8000)
     rules = [
         f"Translate {kind} from {source or 'the source language'} into {target}.",
         "Return exactly one translation per numbered line, with the same `item` number. Never merge or split lines.",
@@ -648,13 +1076,13 @@ def translate_items(texts, target, source, names, settings, kind):
     lines, chunks, idx, size = [], [], [], 0
     for i, t in enumerate(texts):
         ln = f"{i} | {t}"
-        if size + len(ln) > 8000 and lines:
+        if size + len(ln) > limit and lines:
             chunks.append("\n".join(lines)); lines, size = [], 0
         lines.append(ln); size += len(ln) + 1
     if lines:
         chunks.append("\n".join(lines))
     for ch in chunks:
-        res, _ = claude_call(key, settings["claude_model"], system, ch, schema=TRANSLATE_SCHEMA, lead="Translate these lines:")
+        res = ai_json(settings, system, ch, TRANSLATE_SCHEMA, "Translate these lines:")
         for t in res.get("translations", []):
             if isinstance(t.get("item"), int) and 0 <= t["item"] < len(out):
                 out[t["item"]] = t["text"].strip()
@@ -721,9 +1149,8 @@ def _quote_span(words, para, quote):
 
 
 def summarize_state(st, settings):
-    key = get_api_key()
-    if not key:
-        raise RuntimeError("summaries need a Claude API key")
+    if not ai_ready(settings):
+        raise RuntimeError(f"summaries need AI: {ai_not_ready_reason(settings)}")
     tc_offset = tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     lines = []
     for i, p in enumerate(st["paras"]):
@@ -741,9 +1168,29 @@ def summarize_state(st, settings):
         "`why` is a few words on what it's good for, e.g. 'opens the story', 'emotional peak', 'explains the menu'. Order them by time.",
         "If the conversation is very short or has no usable bites, return fewer.",
     ])
-    progress("Claude is writing the summary", 0.5)
-    log("  Claude summary…")
-    res, _ = claude_call(key, settings["claude_model"], system, text, schema=SUMMARY_SCHEMA, lead="Log this conversation:")
+    log("  writing the summary…")
+    limit = ai_chunk(settings, 400_000)
+    if len(text) <= limit:
+        res = ai_json(settings, system, text, SUMMARY_SCHEMA, "Log this conversation:")
+    else:
+        # small local models: summarize in parts, then combine
+        parts, cur, size = [], [], 0
+        for ln in lines:
+            if size + len(ln) > limit and cur:
+                parts.append("\n".join(cur)); cur, size = [], 0
+            cur.append(ln); size += len(ln) + 1
+        if cur:
+            parts.append("\n".join(cur))
+        sums, bites = [], []
+        for k, part in enumerate(parts):
+            log(f"  summary, part {k + 1} of {len(parts)}…")
+            r = ai_json(settings, system, part, SUMMARY_SCHEMA, "Log this part of the conversation:")
+            sums.append(r.get("summary", "")); bites += r.get("soundbites", [])[:3]
+        combine = {"type": "object", "properties": {"summary": {"type": "string"}, "topics": {"type": "array", "items": {"type": "string"}}},
+                   "required": ["summary", "topics"], "additionalProperties": False}
+        r = ai_json(settings, "Combine these partial summaries of one conversation into a single 3–6 sentence summary and 3–8 short topics, in order. Refer to speakers exactly by the labels used.",
+                    "\n\n".join(f"Part {i + 1}: {t}" for i, t in enumerate(sums)), combine, "Combine:")
+        res = {"summary": r.get("summary", ""), "topics": r.get("topics", []), "soundbites": bites[:10]}
     bites = []
     for b in res.get("soundbites", []):
         i = b.get("item")
@@ -778,14 +1225,15 @@ def summary_view(st):
     }
 
 
-def write_summary(st, out):
+def write_summary(st, out, txt=True):
     v = summary_view(st)
     if not v:
         return
     media = Path(st["media"])
     lab = shown_labels({int(k): x for k, x in st["labels"].items()})
-    with open(out["sum_txt"], "w", encoding="utf-8") as f:
-        f.write(f"{media.name}\nSummary by Claude\n\n{v['summary']}\n\nTopics\n")
+    if txt:
+      with open(out["sum_txt"], "w", encoding="utf-8") as f:
+        f.write(f"{media.name}\nSummary\n\n{v['summary']}\n\nTopics\n")
         f.write("".join(f"- {t}\n" for t in v["topics"]))
         f.write("\nSoundbites\n")
         for b in v["soundbites"]:
@@ -967,22 +1415,72 @@ def write_docx(path, media, words, paras, labels, tc_offset, fps, meta, texts=No
 
 
 # ---------------------------------------------------------------- one file
-def outputs_for(media, tr_codes=None):
-    base = Path(media).with_suffix("")
-    out = {
+TRANSCRIPT_FILES = {"srt", "docx", "txt", "summary"}
+
+
+def default_opts(settings):
+    """What to make and where, from Settings (used by the watch folder and as the window's defaults)."""
+    files = list(settings.get("outputs") or ["srt", "docx", "summary"])
+    if settings.get("summary") is False and "summary" in files:  # honor the older on/off setting
+        files.remove("summary")
+    tr = [t.strip() for t in (settings.get("translate_to") or "").split(",") if t.strip()]
+    return {"files": files, "translate": tr, "dest": settings.get("dest", "beside"),
+            "dir": settings.get("dest_dir", ""), "cleanup": settings.get("audio_cleanup", "local")}
+
+
+def out_dir(media, out):
+    media = Path(media)
+    dest = (out or {}).get("dest", "beside")
+    if dest == "folder" and (out or {}).get("dir"):
+        return Path(out["dir"]).expanduser()
+    if dest == "subfolder":
+        return media.parent / "Transcripts"
+    return media.parent
+
+
+def _base_taken(base):
+    return any(Path(f"{base}{sfx}").exists() for sfx in (".srt", " - transcript.docx", " - transcript.txt", " - summary.docx", " - clean.wav"))
+
+
+def resolve_out(media, opts):
+    """Fix the output location for a clip once, so renames and later translations land in the same place."""
+    media = Path(media)
+    out = {"files": list(opts.get("files", [])), "dest": opts.get("dest", "beside"), "dir": opts.get("dir", "")}
+    d = out_dir(media, out)
+    base = d / media.stem
+    prev = load_state_for(media)
+    if prev and prev.get("out", {}).get("base") and Path(prev["out"]["base"]).parent == d:
+        base = Path(prev["out"]["base"])       # same clip, same place: overwrite its own files
+    elif prev and not prev.get("out") and d == media.parent:
+        pass                                   # transcribed with an older version: its files are the plain names
+    elif _base_taken(base):
+        # another clip with the same name already wrote here: keep both
+        alt = d / f"{media.stem} ({media.suffix.lstrip('.').lower()})"
+        if out["dest"] == "folder":
+            alt = d / f"{media.parent.name} - {media.stem}"
+        base = alt
+    out["base"] = str(base)
+    return out
+
+
+def outputs_for(media, tr_codes=None, out=None):
+    """Every file Transcribe could write for a clip. Callers check .exists() for what was actually made."""
+    base = Path(out["base"]) if out and out.get("base") else out_dir(media, out) / Path(media).stem
+    res = {
         "srt": Path(f"{base}.srt"),
         "txt": Path(f"{base} - transcript.txt"),
         "docx": Path(f"{base} - transcript.docx"),
+        "sum_docx": Path(f"{base} - summary.docx"),
+        "sum_txt": Path(f"{base} - summary.txt"),
+        "clean": Path(f"{base} - clean.wav"),
     }
-    out["sum_docx"] = Path(f"{base} - summary.docx")
-    out["sum_txt"] = Path(f"{base} - summary.txt")
     if isinstance(tr_codes, str):
         tr_codes = [tr_codes]
     for code in tr_codes or []:
-        out[f"srt_{code}"] = Path(f"{base} - {code}.srt")
-        out[f"txt_{code}"] = Path(f"{base} - transcript {code}.txt")
-        out[f"docx_{code}"] = Path(f"{base} - transcript {code}.docx")
-    return out
+        res[f"srt_{code}"] = Path(f"{base} - {code}.srt")
+        res[f"txt_{code}"] = Path(f"{base} - transcript {code}.txt")
+        res[f"docx_{code}"] = Path(f"{base} - transcript {code}.docx")
+    return res
 
 
 def translations(st):
@@ -994,7 +1492,7 @@ def translations(st):
 
 
 def outputs_for_state(st):
-    return outputs_for(Path(st["media"]), list(translations(st)))
+    return outputs_for(Path(st["media"]), list(translations(st)), st.get("out"))
 
 
 def translate_state(st, target, settings, names=None):
@@ -1020,30 +1518,63 @@ def translate_state(st, target, settings, names=None):
     return True
 
 
-def process(media, settings):
+def process(media, settings, opts=None):
     media = Path(media)
     t0 = time.time()
     CLIP_COST["usd"] = 0.0
+    opts = opts or default_opts(settings)
+    files = set(opts.get("files") or [])
+    want_transcript = bool(files & TRANSCRIPT_FILES) or bool(opts.get("translate"))
+    out = resolve_out(media, opts)
+    outs = outputs_for(media, None, out)
+    Path(out["base"]).parent.mkdir(parents=True, exist_ok=True)
     log(f"▶ {media.name}")
     names = read_names(media.parent)
     if names:
         log(f"  using {len(names)} names & terms")
 
-    progress("Reading audio", 0.02)
-    audio = load_audio(media)
+    cleaned = None
+    if "clean" in files:
+        service = opts.get("cleanup") or settings.get("audio_cleanup") or "local"
+        try:
+            cleaned = clean_audio(media, service)
+            write_wav(outs["clean"], cleaned)
+            log(f"  clean audio → {outs['clean'].name}")
+        except NoAudio:
+            raise
+        except Exception as e:
+            log(f"  audio cleanup failed: {e}")
+            if not want_transcript:
+                raise RuntimeError(f"audio cleanup failed: {e}")
+
+    if not want_transcript:
+        state = {"media": str(media), "out": out, "audio_only": True, "secs": len(cleaned) / CLEAN_SR,
+                 "labels": {}, "words": [], "paras": [], "tc": None, "fps": None, "lang": None, "fixes": 0}
+        save_state(state)
+        progress("Done", 1.0)
+        log(f"  done in {int(time.time() - t0)}s")
+        return state
+
+    progress("Reading audio", 0.25 if cleaned is not None else 0.02)
+    if cleaned is not None and settings.get("transcribe_cleaned", True):
+        import numpy as np
+        audio = np.interp(np.arange(0, len(cleaned), CLEAN_SR / SR), np.arange(len(cleaned)), cleaned).astype(np.float32)
+        log("  transcribing from the cleaned audio")
+    else:
+        audio = load_audio(media)
     secs = len(audio) / SR
     log(f"  {fmt_tc(secs)} of audio")
 
     turns = []
     if settings["speaker_labels"]:
-        progress("Finding speakers", 0.08)
+        progress("Finding speakers", 0.3 if cleaned is not None else 0.08)
         log("  finding speakers…")
         try:
             turns = diarize(audio, settings)
         except Exception as e:
             log(f"  speaker labels failed ({e}); continuing without them")
 
-    progress("Transcribing", 0.25)
+    progress("Transcribing", 0.35 if cleaned is not None else 0.25)
     log(f"  transcribing ({engine_name()}, {settings['model']})…")
     words, lang = transcribe_words(audio, settings, names, turns)
     if not words:
@@ -1056,36 +1587,37 @@ def process(media, settings):
 
     fixes = 0
     if settings["claude_cleanup"]:
-        progress("Claude is checking names & terms", 0.75)
+        progress("Checking names & terms", 0.75)
         try:
-            log("  Claude cleanup…")
             words, paras, labels, fixes = claude_cleanup(words, paras, names, settings, labels)
         except Exception as e:
-            log(f"  Claude cleanup skipped: {e}")
+            log(f"  name fixes skipped: {e}")
 
     caps = build_captions([w for w in words if w["text"]], settings)
     tc, fps = read_start_timecode(media)
     state = {
-        "media": str(media), "words": words, "paras": paras,
+        "media": str(media), "words": words, "paras": paras, "out": out,
         "labels": {str(k): v for k, v in labels.items()},
         "tc": tc, "fps": fps, "secs": secs, "lang": lang, "fixes": fixes,
         "caps": [{"start": c["start"], "end": c["end"], "lines": c["lines"]} for c in caps],
     }
 
-    if settings.get("summary") and get_api_key():
-        progress("Claude is writing the summary", 0.8)
-        try:
-            summarize_state(state, settings)
-        except Exception as e:
-            log(f"  summary skipped: {e}")
+    if "summary" in files:
+        if ai_ready(settings):
+            progress("Writing the summary", 0.8)
+            try:
+                summarize_state(state, settings)
+            except Exception as e:
+                log(f"  summary skipped: {e}")
+        else:
+            log(f"  summary skipped: {ai_not_ready_reason(settings)}")
 
-    target = (settings.get("translate_to") or "").strip()
-    if target:
+    for target in opts.get("translate") or []:
         progress(f"Translating to {target}", 0.85)
         try:
             translate_state(state, target, settings, names)
         except Exception as e:
-            log(f"  translation skipped: {e}")
+            log(f"  translation to {target} skipped: {e}")
 
     progress("Writing files", 0.97)
     state["cost_usd"] = round(state.get("cost_usd", 0) + CLIP_COST["usd"], 4)
@@ -1093,8 +1625,8 @@ def process(media, settings):
         log(f"  Claude cost for this clip ≈ ${CLIP_COST['usd']:.3f}")
     write_outputs(state, settings)
     save_state(state)
-    out = outputs_for_state(state)
-    log(f"  done in {int(time.time() - t0)}s → " + ", ".join(p.name for p in out.values()))
+    made = [p.name for p in outputs_for_state(state).values() if p.exists()]
+    log(f"  done in {int(time.time() - t0)}s → " + ", ".join(made))
     progress("Done", 1.0)
     return state
 
@@ -1115,25 +1647,34 @@ def state_meta(st, translated=None):
 
 
 def write_outputs(st, settings, captions=True):
+    if st.get("audio_only"):
+        return
     media = Path(st["media"])
     trs = translations(st)
-    out = outputs_for(media, list(trs))
+    out = outputs_for(media, list(trs), st.get("out"))
+    files = set((st.get("out") or {}).get("files") or ["srt", "docx", "txt", "summary"])  # older clips made everything
     labels = {int(k): v for k, v in st["labels"].items()}
     tc_offset = tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     caps = st.get("caps") or build_captions([w for w in st["words"] if w["text"]], settings)
-    if captions:
+    if captions and "srt" in files:
         write_srt(out["srt"], caps)
-    write_txt(out["txt"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], state_meta(st))
-    write_docx(out["docx"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], state_meta(st))
+    if "txt" in files:
+        write_txt(out["txt"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], state_meta(st))
+    if "docx" in files:
+        write_docx(out["docx"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], state_meta(st))
     if st.get("summary"):
-        write_summary(st, out)
+        write_summary(st, out, txt="txt" in files)
+    # translations follow the same choices; if no caption or transcript file was picked, make captions + Word
+    tr_files = files & {"srt", "docx", "txt"} or {"srt", "docx"}
     maxc = settings["max_chars_per_line"]
     for code, tr in trs.items():
-        if captions or not out[f"srt_{code}"].exists():
+        if "srt" in tr_files and (captions or not out[f"srt_{code}"].exists()):
             write_srt(out[f"srt_{code}"], [dict(c, lines=split_text_lines(t, maxc)) for c, t in zip(caps, tr["caps"])])
         meta = state_meta(st, tr)
-        write_txt(out[f"txt_{code}"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], meta, texts=tr["paras"])
-        write_docx(out[f"docx_{code}"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], meta, texts=tr["paras"])
+        if "txt" in tr_files:
+            write_txt(out[f"txt_{code}"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], meta, texts=tr["paras"])
+        if "docx" in tr_files:
+            write_docx(out[f"docx_{code}"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], meta, texts=tr["paras"])
 
 
 # ---------------------------------------------------------------- saved state (for naming speakers later)
@@ -1168,6 +1709,16 @@ def load_state_for(path):
     sp = _state_path(p)
     if sp.exists():
         return json.loads(sp.read_text())
+    # outputs saved somewhere else: search saved clips for one that wrote this file
+    target = str(Path(path).resolve())
+    if SESSIONS.exists():
+        for f in SESSIONS.glob("*.json"):
+            try:
+                st = json.loads(f.read_text())
+            except (OSError, ValueError):
+                continue
+            if target == str(Path(st.get("media", "")).resolve()) or any(str(o.resolve()) == target for o in outputs_for_state(st).values()):
+                return st
     return None
 
 
@@ -1260,7 +1811,7 @@ def remember_no_audio(media):
 
 
 def is_done(media):
-    return outputs_for(media)["srt"].exists() or _skip_key(media) in _skipped()
+    return _state_path(media).exists() or outputs_for(media)["srt"].exists() or _skip_key(media) in _skipped()
 
 
 def expand(paths):
@@ -1349,7 +1900,9 @@ def main(argv):
             cur = json.loads(SETTINGS_FILE.read_text())
         except (OSError, ValueError):
             pass
-        if isinstance(DEFAULTS[key], bool):
+        if isinstance(DEFAULTS[key], list):
+            val = [v.strip() for v in val.split(",") if v.strip()]
+        elif isinstance(DEFAULTS[key], bool):
             val = val.lower() in ("1", "true", "yes", "on")
         elif isinstance(DEFAULTS[key], (int, float)) and not isinstance(DEFAULTS[key], bool):
             val = type(DEFAULTS[key])(val)

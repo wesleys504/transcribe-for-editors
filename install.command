@@ -34,7 +34,7 @@ say_step "Installing transcription libraries"
 COMMON="sherpa-onnx>=1.12,<3 av>=12 numpy python-docx certifi truststore pywebview>=5"
 if [ "$ARCH" = "arm64" ]; then
   echo "Apple Silicon Mac — using MLX Whisper (fast, uses the GPU)."
-  "$UV" pip install --python "$PY" $COMMON mlx-whisper
+  "$UV" pip install --python "$PY" $COMMON mlx-whisper deepfilternet-rs
 else
   echo "Intel Mac — using faster-whisper."
   "$UV" pip install --python "$PY" $COMMON faster-whisper
@@ -97,8 +97,8 @@ cat > "$APP/Contents/Info.plist" <<PL
   <key>CFBundleName</key><string>Transcribe</string>
   <key>CFBundleDisplayName</key><string>Transcribe</string>
   <key>CFBundleIdentifier</key><string>local.transcribe.app</string>
-  <key>CFBundleVersion</key><string>2.1</string>
-  <key>CFBundleShortVersionString</key><string>2.1</string>
+  <key>CFBundleVersion</key><string>3.0</string>
+  <key>CFBundleShortVersionString</key><string>3.0</string>
   <key>NSHumanReadableCopyright</key><string>© 2026 TBD Media Post. Free for personal, noncommercial use.</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>Transcribe</string>

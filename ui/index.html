@@ -144,6 +144,23 @@
   .bite .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .bite .play { width: 28px; height: 28px; border-radius: 50%; padding: 0; }
   .bite .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .sheet h3 { font-size: 13px; font-weight: 650; margin: 26px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .sheet h3:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+  .choice { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; }
+  .choice input { width: auto; margin-top: 2px; }
+  .choice .hint { margin-top: 1px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; }
+  .seg button { flex: 1; border: none; border-radius: 0; background: transparent; padding: 7px 8px; color: var(--muted); }
+  .seg button.on { background: var(--raised); color: var(--text); font-weight: 600; }
+  .create-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+  .create-cols h4 { font-size: 12px; font-weight: 650; margin: 4px 0 2px; color: var(--muted); }
+  .clips { color: var(--muted); font-size: 12px; margin: -6px 0 14px; max-height: 3.2em; overflow: hidden; }
+  .warn { color: var(--bad); font-size: 12px; margin-top: 4px; }
+  .pathrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .pathrow .path { flex: 1; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meter { height: 4px; background: var(--raised); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+  .meter i { display: block; height: 100%; background: var(--btn); }
+  @media (max-width: 720px) { .create-cols { grid-template-columns: 1fr; } }
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line);
     padding: 8px 14px; border-radius: var(--radius-s); display: none; }
   .toast.show { display: block; }
@@ -164,7 +181,7 @@
   <div class="drop big" id="drop">
     <div class="say">
       <strong>Drop clips or folders here</strong>
-      <span id="dropHint">You'll get captions (.srt) and a timecoded transcript next to each clip.</span>
+      <span id="dropHint">Then choose what to create (captions, transcripts, summaries, translations, clean audio) and where to save it.</span>
     </div>
     <div class="buttons">
       <button class="primary" id="addFiles">Add clips…</button>
@@ -183,7 +200,7 @@
     <div id="recent" hidden></div>
     <div id="log" class="log" hidden></div>
   </div>
-  <footer class="credit">Transcribe 2.1. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
+  <footer class="credit">Transcribe 3.0. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -191,32 +208,84 @@
 <aside class="sheet" id="settings" aria-label="Settings">
   <h2>Settings</h2>
 
+  <h3>What to make</h3>
+  <div class="field switch">
+    <div><label for="askOutputs">Ask what to create each time</label><div class="hint">When off, new clips (and the watch folder) use your saved choices.</div></div>
+    <input id="askOutputs" type="checkbox" />
+  </div>
+  <div class="field"><button id="editDefaults">Saved file choices…</button><div class="hint" id="defaultsHint"></div></div>
+
+  <h3>AI for name fixes, summaries and translation</h3>
   <div class="field">
-    <label for="key">Claude API key</label>
-    <div class="keyrow"><input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" /><button id="saveKey">Save</button></div>
-    <div class="hint" id="keyState"></div>
+    <div class="seg" role="radiogroup" aria-label="AI provider">
+      <button data-ai="claude" role="radio">Claude</button>
+      <button data-ai="local" role="radio">On this Mac (free)</button>
+    </div>
+    <div class="hint" id="aiHint"></div>
+  </div>
+
+  <div id="claudeBox">
+    <div class="field">
+      <label for="key">Claude API key</label>
+      <div class="keyrow"><input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" /><button id="saveKey">Save</button></div>
+      <div class="hint" id="keyState"></div>
+    </div>
+    <div class="field">
+      <label for="claudeModel">Claude model</label>
+      <select id="claudeModel">
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recommended)</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5 (about 20 times cheaper, a little less careful)</option>
+        <option value="claude-opus-5-5">Claude Opus 5.5 (most capable, about twice the cost)</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="localBox" hidden>
+    <div class="field">
+      <label>Ollama</label>
+      <div class="hint" id="ollamaState"></div>
+    </div>
+    <div class="field">
+      <label for="localModel">Local model</label>
+      <select id="localModel"></select>
+      <div class="pathrow"><button id="pullModel">Download model</button><span class="path" id="pullState"></span></div>
+      <div class="meter" id="pullMeter" hidden><i style="width:0%"></i></div>
+      <div class="hint">Free and offline, but slower than Claude and a little less polished, especially for translation.</div>
+    </div>
   </div>
 
   <div class="field switch">
-    <div><label for="cleanup">Fix names and terms with Claude</label><div class="hint">Uses your names list. Leaves how people talk alone.</div></div>
+    <div><label for="cleanup">Fix names and terms</label><div class="hint">Uses your names list. Leaves how people talk alone.</div></div>
     <input id="cleanup" type="checkbox" />
   </div>
 
-  <div class="field switch">
-    <div><label for="summary">Write a summary with soundbites</label><div class="hint">A few sentences, the topics, and the best 5–10 bites with timecodes.</div></div>
-    <input id="summary" type="checkbox" />
-  </div>
-
+  <h3>Audio cleanup</h3>
   <div class="field">
-    <label for="translate">Also translate to</label>
-    <select id="translate">
-      <option value="">Don't translate</option>
-      <option>English</option><option>Spanish</option><option>Catalan</option><option>French</option><option>Italian</option>
-      <option>German</option><option>Portuguese</option><option>Dutch</option><option>Japanese</option><option>Chinese</option><option>Korean</option>
-    </select>
-    <div class="hint">Adds translated captions with the same timings, plus a translated transcript. Needs the API key.</div>
+    <label for="cleanService">Clean audio with</label>
+    <select id="cleanService"></select>
+    <div class="hint" id="cleanHint"></div>
+  </div>
+  <div class="field switch">
+    <div><label for="transcribeCleaned">Transcribe from the cleaned audio</label><div class="hint">Helps with noisy recordings.</div></div>
+    <input id="transcribeCleaned" type="checkbox" />
+  </div>
+  <div class="field">
+    <label for="elKey">ElevenLabs API key</label>
+    <div class="keyrow"><input id="elKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="elevenlabs" data-input="elKey">Save</button></div>
+    <div class="hint" data-keystate="elevenlabs"></div>
+  </div>
+  <div class="field">
+    <label for="auKey">Auphonic API key</label>
+    <div class="keyrow"><input id="auKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="auphonic" data-input="auKey">Save</button></div>
+    <div class="hint" data-keystate="auphonic"></div>
+  </div>
+  <div class="field">
+    <label for="acKey">ai-coustics API key</label>
+    <div class="keyrow"><input id="acKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="aicoustics" data-input="acKey">Save</button></div>
+    <div class="hint" data-keystate="aicoustics"></div>
   </div>
 
+  <h3>Transcription</h3>
   <div class="field">
     <label for="speakers">People talking</label>
     <select id="speakers">
@@ -225,12 +294,10 @@
     </select>
     <div class="hint">If you know the number, speaker labels get more accurate.</div>
   </div>
-
   <div class="field switch">
     <div><label for="ask">Ask me to name speakers</label><div class="hint">Opens the naming window when a clip finishes.</div></div>
     <input id="ask" type="checkbox" />
   </div>
-
   <div class="field">
     <label for="language">Spoken language</label>
     <select id="language">
@@ -239,13 +306,11 @@
       <option value="it">Italian</option><option value="de">German</option><option value="pt">Portuguese</option><option value="ja">Japanese</option>
     </select>
   </div>
-
   <div class="field">
     <label for="names">Names and terms</label>
     <textarea id="names" placeholder="Oriol Castro&#10;Disfrutar&#10;Eduard Xatruch"></textarea>
-    <div class="hint">One per line. Whisper listens for these and Claude fixes their spelling. For one project only, put a names.txt file in that project's footage folder.</div>
+    <div class="hint">One per line. Whisper listens for these and the AI fixes their spelling. For one project only, put a names.txt file in that project's footage folder.</div>
   </div>
-
   <div class="field">
     <label for="lineLen">Caption line length</label>
     <select id="lineLen">
@@ -254,22 +319,6 @@
       <option value="37">37 characters</option>
     </select>
   </div>
-
-  <div class="field">
-    <label for="claudeModel">Claude model</label>
-    <select id="claudeModel">
-      <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recommended)</option>
-      <option value="claude-haiku-5-5">Claude Haiku 5.5 (about 20 times cheaper, a little less careful)</option>
-      <option value="claude-opus-5-5">Claude Opus 5.5 (most capable, about twice the cost)</option>
-    </select>
-    <div class="hint">Used for name fixes, summaries and translation. Transcription itself always runs on your Mac.</div>
-  </div>
-
-  <div class="field">
-    <label>Claude spending</label>
-    <div id="spendDetail" class="hint"></div>
-  </div>
-
   <div class="field">
     <label for="model">Whisper model</label>
     <select id="model">
@@ -280,9 +329,12 @@
     <div class="hint" id="engineHint"></div>
   </div>
 
+  <h3>Spending</h3>
+  <div class="field"><div id="spendDetail" class="hint"></div></div>
+
+  <h3>About</h3>
   <div class="field">
-    <label>About</label>
-    <div class="hint">Transcribe 2.1<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Cleanup, summaries and translation by Claude.</div>
+    <div class="hint">Transcribe 3.0<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Name fixes, summaries and translation by Claude or a free local model. Audio cleanup on this Mac or by ElevenLabs, Auphonic or ai-coustics.</div>
   </div>
 </aside>
 
@@ -318,6 +370,38 @@
     <button class="quiet" id="sumCopy">Copy soundbites</button>
     <button id="sumDoc">Open summary doc</button>
     <button class="primary" id="sumClose">Done</button>
+  </div>
+</div>
+
+<div class="modal" id="createModal" role="dialog" aria-modal="true" aria-labelledby="createTitle">
+  <h2 id="createTitle">Create files</h2>
+  <p class="clips" id="createClips"></p>
+  <div class="create-cols">
+    <div>
+      <h4>Files</h4>
+      <label class="choice"><input type="checkbox" value="srt" name="cf" /> <span>Captions (.srt)<div class="hint">Ready to import into Premiere</div></span></label>
+      <label class="choice"><input type="checkbox" value="docx" name="cf" /> <span>Transcript (Word)<div class="hint">Timecoded, with speaker names</div></span></label>
+      <label class="choice"><input type="checkbox" value="txt" name="cf" /> <span>Transcript (text)</span></label>
+      <label class="choice"><input type="checkbox" value="summary" name="cf" /> <span>Summary and soundbites</span></label>
+      <label class="choice"><input type="checkbox" value="clean" name="cf" /> <span>Clean audio (.wav)<div class="hint">Same length as the clip, so it stays in sync</div></span></label>
+      <div class="field" id="cleanWithBox" style="margin:6px 0 0 24px"><select id="cfCleanup" aria-label="Clean audio with"></select><div class="warn" id="cfCleanWarn"></div></div>
+      <div class="warn" id="cfAiWarn"></div>
+    </div>
+    <div>
+      <h4>Translate to</h4>
+      <div class="langs" id="cfLangs"></div>
+      <h4 style="margin-top:14px">Save to</h4>
+      <label class="choice"><input type="radio" name="cfDest" value="beside" /> <span>Next to each clip</span></label>
+      <label class="choice"><input type="radio" name="cfDest" value="subfolder" /> <span>A Transcripts folder next to each clip</span></label>
+      <label class="choice"><input type="radio" name="cfDest" value="folder" /> <span>One folder</span></label>
+      <div class="pathrow"><button id="cfChoose">Choose folder…</button><span class="path" id="cfDir"></span></div>
+    </div>
+  </div>
+  <label class="choice" style="margin-top:12px"><input type="checkbox" id="cfRemember" /> <span>Save these as my choices</span></label>
+  <label class="choice"><input type="checkbox" id="cfDontAsk" /> <span>Don't ask again (change this in Settings)</span></label>
+  <div class="foot">
+    <button class="quiet" id="cfCancel">Cancel</button>
+    <button class="primary" id="cfStart">Start</button>
   </div>
 </div>
 
@@ -373,14 +457,15 @@ function renderQueue() {
     const pct = Math.round((j.frac || 0) * 100);
     const indet = j.status === "running" && j.stage === "Transcribing" && S.engine === "mlx";
     return `<div class="row ${j.status}">
-      <div><div class="name" title="${esc(j.path)}">${esc(j.name)}</div><div class="where">${esc(j.folder)}</div></div>
+      <div><div class="name" title="${esc(j.path)}">${esc(j.name)}</div><div class="where">${esc(j.plan ? j.plan : j.folder)}</div></div>
       <div><div class="status ${j.status}">${esc(statusText(j))}</div>
         ${j.status === "running" || j.status === "queued" ? `<div class="bar"><i class="${indet ? "indet" : ""}" style="width:${pct}%"></i></div>` : ""}
         ${j.status === "done" && j.cost ? `<div class="cost">Claude: ${money(j.cost)}</div>` : ""}</div>
       <div class="actions">
         ${j.status === "done" && j.kind === "translate" ? `${j.outputs[0] ? `<button data-open="${esc(j.outputs[0])}">Open translation</button>` : ""}<button class="quiet" data-reveal="${esc(j.outputs[0] || j.path)}">Show in Finder</button>` : ""}
         ${j.status === "done" && j.kind === "summarize" ? `<button data-summary="${esc(j.path)}">Summary</button>` : ""}
-        ${j.status === "done" && !j.kind ? clipActions({ path: j.path, outputs: j.outputs, speakers: j.speakers, named: j.named, hasSummary: j.has_summary }) : ""}
+        ${j.status === "done" && !j.kind && !j.speakers && j.outputs.length && j.outputs.every((o) => o.endsWith(" - clean.wav")) ? `<button data-open="${esc(j.outputs[0])}">Play clean audio</button><button class="quiet" data-reveal="${esc(j.outputs[0])}">Show in Finder</button>` : ""}
+        ${j.status === "done" && !j.kind && !(j.outputs.length && j.outputs.every((o) => o.endsWith(" - clean.wav"))) ? clipActions({ path: j.path, outputs: j.outputs, speakers: j.speakers, named: j.named, hasSummary: j.has_summary }) : ""}
         ${j.status === "failed" ? `<button data-retry="${esc(j.id)}">Try again</button>` : ""}
       </div>
       ${j.status === "failed" && j.error ? `<div class="err">${esc(j.error)}</div>` : ""}
@@ -402,7 +487,8 @@ function renderLog() { $("#log").textContent = S.log.join("\n") || "No activity 
 function renderSpend() {
   const m = S.usage.this_month;
   $("#spendBtn").textContent = `Claude this month: ${money(m.usd)}`;
-  $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`;
+  $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`
+    + (Object.keys(m.services || {}).length ? `<br><br>Audio cleanup this month: ${Object.entries(m.services).map(([k, v]) => `${esc(S.cleanupServices[k] || k)} ${v.toFixed(1)} min`).join(", ")}.` : "");
 }
 function renderHeader() {
   renderSpend();
@@ -413,9 +499,14 @@ function renderHeader() {
 function loadSettingsForm() {
   const s = S.settings;
   $("#cleanup").checked = !!s.claude_cleanup;
-  $("#summary").checked = s.summary !== false;
+  $("#askOutputs").checked = s.ask_outputs !== false;
+  $("#transcribeCleaned").checked = s.transcribe_cleaned !== false;
+  $("#cleanService").innerHTML = Object.entries(S.cleanupServices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  $("#cleanService").value = s.audio_cleanup || "local";
+  $("#localModel").innerHTML = Object.entries(S.ollama.choices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  $("#localModel").value = s.local_model || "qwen2.5:7b";
+  renderAi();
   $("#ask").checked = s.ask_speaker_names !== false;
-  $("#translate").value = s.translate_to || "";
   $("#speakers").value = String(s.speakers || "auto");
   $("#language").value = s.language || "auto";
   $("#lineLen").value = String(s.max_chars_per_line || 42);
@@ -426,9 +517,43 @@ function loadSettingsForm() {
   renderKeyState();
   settingsLoaded = true;
 }
+const SERVICE_NAMES = { elevenlabs: "ElevenLabs", auphonic: "Auphonic", aicoustics: "ai-coustics" };
+function renderServiceKeys() {
+  document.querySelectorAll("[data-keystate]").forEach((el) => {
+    const svc = el.dataset.keystate;
+    el.innerHTML = S.keys[svc] ? `<span class="ok">Key saved in your Keychain.</span> <button class="quiet" data-delkey="${svc}">Remove</button>` : "No key saved.";
+  });
+  const svc = $("#cleanService").value;
+  $("#cleanHint").textContent = svc === "local"
+    ? (S.localCleanup ? "Free and offline. Good for hum, room noise and wind." : "Needs an Apple Silicon Mac. Pick a service instead.")
+    : svc === "elevenlabs" ? "Pulls the voice out of noisy or music-heavy audio. Uses your ElevenLabs credits."
+    : svc === "auphonic" ? "Noise and reverb reduction, leveling, broadcast loudness (-23 LUFS). 2 free hours a month."
+    : "Studio-style speech enhancement, loudness -23 LUFS. Paid, with a free trial.";
+}
+function renderAi() {
+  const ai = S.settings.ai_provider === "local" ? "local" : "claude";
+  document.querySelectorAll("[data-ai]").forEach((b) => { b.classList.toggle("on", b.dataset.ai === ai); b.setAttribute("aria-checked", b.dataset.ai === ai); });
+  $("#claudeBox").hidden = ai !== "claude";
+  $("#localBox").hidden = ai !== "local";
+  const o = S.ollama;
+  $("#aiHint").textContent = ai === "claude" ? "Best quality. About a cent per transcript." : "Free and private: nothing leaves your Mac.";
+  $("#ollamaState").innerHTML = o.running
+    ? (o.hasModel ? `<span class="ok">Running, and the model is ready.</span>` : "Running. Download the model below to use it.")
+    : `Not running. Install the free Ollama app from ollama.com, open it, then come back here. <button class="quiet" id="ollamaRefresh">Check again</button>`;
+  const p = o.pull;
+  $("#pullMeter").hidden = !p.busy;
+  $("#pullMeter i").style.width = Math.round((p.frac || 0) * 100) + "%";
+  $("#pullState").textContent = p.error ? p.error : p.busy ? `${p.status} ${Math.round((p.frac || 0) * 100)}%` : (o.hasModel ? "Downloaded" : "");
+  $("#pullModel").disabled = !o.running || p.busy || o.hasModel;
+  const r = $("#ollamaRefresh"); if (r) r.onclick = async () => { await api("/api/ollama/refresh", {}); refresh(); };
+}
 function renderKeyState() {
   $("#keyState").innerHTML = S.hasKey ? `<span class="ok">Key saved in your Keychain.</span> <button class="quiet" id="removeKey">Remove</button>` : "No key saved. Transcription still works; name fixes and translation need a key.";
   const rm = $("#removeKey"); if (rm) rm.onclick = async () => { await api("/api/key/delete", {}); await refresh(); renderKeyState(); toast("Key removed"); };
+  renderServiceKeys();
+  const d = S.defaults, names = { srt: "captions", docx: "Word transcript", txt: "text transcript", summary: "summary", clean: "clean audio" };
+  $("#defaultsHint").textContent = "Saved: " + (d.files.map((f) => names[f]).join(", ") || "nothing") + (d.translate.length ? `, translated to ${d.translate.join(", ")}` : "")
+    + ". Saved " + (d.dest === "folder" ? `to ${d.dir || "a folder"}` : d.dest === "subfolder" ? "in a Transcripts folder" : "next to each clip") + ".";
 }
 
 async function refresh() {
@@ -437,6 +562,9 @@ async function refresh() {
   if (tab === "queue") renderQueue();
   if (tab === "log") renderLog();
   if (!settingsLoaded) loadSettingsForm();
+  else if ($("#settings").classList.contains("open")) { renderAi(); renderServiceKeys(); }
+  if (S.pending.length && !document.querySelector(".modal.open")) openCreate(false);
+  if ($("#createModal").classList.contains("open") && !createDefaultsOnly) $("#createClips").textContent = clipLine();
   // offer naming for newly finished multi-speaker clips
   if (S.settings.ask_speaker_names !== false) {
     for (const j of S.jobs) {
@@ -573,7 +701,7 @@ $("#sumCopy").onclick = async () => {
   try { await navigator.clipboard.writeText(text); toast("Soundbites copied"); } catch (e) { toast("Couldn't copy. Open the summary doc instead."); }
 };
 const add = async (kind) => {
-  try { const r = await api("/api/pick", { kind }); if (r.found && !r.added) toast("Those clips are already in the queue"); else if (!r.found && r.found !== undefined) toast("No audio or video files there"); refresh(); }
+  try { const r = await api("/api/pick", { kind }); if (r.found === 0) toast("No audio or video files there"); refresh(); }
   catch (e) { toast(e.message); }
 };
 $("#addFiles").onclick = () => add("files");
@@ -606,6 +734,7 @@ document.addEventListener("click", (e) => { if (!e.target.closest(".more")) clos
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if ($("#namer").classList.contains("open")) closeNamer();
+  else if ($("#createModal").classList.contains("open")) $("#cfCancel").click();
   else if ($("#trModal").classList.contains("open")) closeModal("#trModal");
   else if ($("#sumModal").classList.contains("open")) { $("#player").pause(); closeModal("#sumModal"); }
   else openSettings(false);
@@ -613,14 +742,87 @@ document.addEventListener("keydown", (e) => {
 const saveSetting = async (k, v, msg) => { await api("/api/settings", { [k]: v }); S.settings[k] = v; toast(msg || "Saved"); };
 $("#cleanup").onchange = (e) => saveSetting("claude_cleanup", e.target.checked, e.target.checked ? "Claude will fix names and terms" : "Claude cleanup off");
 $("#ask").onchange = (e) => saveSetting("ask_speaker_names", e.target.checked);
-$("#summary").onchange = (e) => saveSetting("summary", e.target.checked, e.target.checked ? "New clips get a summary and soundbites" : "Summaries off");
 $("#spendBtn").onclick = () => openSettings(true);
-$("#translate").onchange = (e) => saveSetting("translate_to", e.target.value, e.target.value ? `New clips will also be translated to ${e.target.value}` : "Translation off");
 $("#speakers").onchange = (e) => saveSetting("speakers", e.target.value);
 $("#language").onchange = (e) => saveSetting("language", e.target.value);
 $("#lineLen").onchange = (e) => saveSetting("max_chars_per_line", Number(e.target.value));
 $("#claudeModel").onchange = (e) => saveSetting("claude_model", e.target.value, `Claude model: ${e.target.selectedOptions[0].textContent.split(" (")[0]}`);
 $("#model").onchange = (e) => saveSetting("model", e.target.value, "Saved. A new model downloads the first time it's used.");
+$("#askOutputs").onchange = (e) => saveSetting("ask_outputs", e.target.checked, e.target.checked ? "I'll ask what to create" : "New clips use your saved choices");
+$("#transcribeCleaned").onchange = (e) => saveSetting("transcribe_cleaned", e.target.checked);
+$("#cleanService").onchange = (e) => { saveSetting("audio_cleanup", e.target.value); S.settings.audio_cleanup = e.target.value; renderServiceKeys(); };
+$("#localModel").onchange = async (e) => { await saveSetting("local_model", e.target.value); await api("/api/ollama/refresh", {}); refresh(); };
+$("#pullModel").onclick = async () => { try { await api("/api/ollama/pull", { model: $("#localModel").value }); toast("Downloading the model. This can take a while."); refresh(); } catch (e) { toast(e.message, 4000); } };
+document.querySelectorAll("[data-ai]").forEach((b) => (b.onclick = async () => {
+  await saveSetting("ai_provider", b.dataset.ai, b.dataset.ai === "local" ? "Using the free local model" : "Using Claude");
+  S.settings.ai_provider = b.dataset.ai; renderAi();
+}));
+document.querySelectorAll("[data-savekey]").forEach((b) => (b.onclick = async () => {
+  const input = $("#" + b.dataset.input);
+  try { await api("/api/secret", { service: b.dataset.savekey, key: input.value.trim() }); input.value = ""; await refresh(); renderServiceKeys(); toast(`${SERVICE_NAMES[b.dataset.savekey]} key saved to your Keychain`); }
+  catch (e) { toast(e.message, 4000); }
+}));
+$("#settings").addEventListener("click", async (e) => {
+  const t = e.target.closest("[data-delkey]"); if (!t) return;
+  await api("/api/secret/delete", { service: t.dataset.delkey }); await refresh(); renderServiceKeys(); toast("Key removed");
+});
+$("#editDefaults").onclick = () => openCreate(true);
+
+// ---------------- "Create files" window
+const CF_LANGS = ["English", "Spanish", "Catalan", "French", "Italian", "German", "Portuguese", "Japanese"];
+let createDefaultsOnly = false, cfDir = "";
+const clipLine = () => S.pending.length === 1 ? S.pending[0].name : `${S.pending.length} clips: ${S.pending.map((p) => p.name).join(", ")}`;
+function openCreate(defaultsOnly) {
+  createDefaultsOnly = defaultsOnly;
+  const d = S.defaults;
+  $("#createTitle").textContent = defaultsOnly ? "Saved file choices" : "Create files";
+  $("#createClips").textContent = defaultsOnly ? "Used for the watch folder, and when Transcribe doesn't ask." : clipLine();
+  document.querySelectorAll('input[name="cf"]').forEach((i) => (i.checked = d.files.includes(i.value)));
+  $("#cfLangs").innerHTML = CF_LANGS.map((l) => `<label><input type="checkbox" value="${l}" ${d.translate.includes(l) ? "checked" : ""} /> ${l}</label>`).join("");
+  $("#cfCleanup").innerHTML = Object.entries(S.cleanupServices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  $("#cfCleanup").value = d.cleanup || "local";
+  document.querySelectorAll('input[name="cfDest"]').forEach((r) => (r.checked = r.value === d.dest));
+  cfDir = d.dir || ""; $("#cfDir").textContent = cfDir || "No folder chosen";
+  $("#cfRemember").checked = defaultsOnly; $("#cfRemember").closest("label").hidden = defaultsOnly;
+  $("#cfDontAsk").checked = S.settings.ask_outputs === false; $("#cfDontAsk").closest("label").hidden = defaultsOnly;
+  $("#cfStart").textContent = defaultsOnly ? "Save" : "Start";
+  cfCheck();
+  $("#createModal").classList.add("open"); $("#scrim").classList.add("open");
+}
+function cfOpts() {
+  return {
+    files: [...document.querySelectorAll('input[name="cf"]:checked')].map((i) => i.value),
+    translate: [...document.querySelectorAll("#cfLangs input:checked")].map((i) => i.value),
+    dest: (document.querySelector('input[name="cfDest"]:checked') || {}).value || "beside",
+    dir: cfDir, cleanup: $("#cfCleanup").value,
+  };
+}
+function cfCheck() {
+  const o = cfOpts();
+  $("#cleanWithBox").hidden = !o.files.includes("clean");
+  const svc = o.cleanup;
+  $("#cfCleanWarn").textContent = !o.files.includes("clean") ? ""
+    : svc === "local" ? (S.localCleanup ? "" : "On-Mac cleanup needs an Apple Silicon Mac.")
+    : S.keys[svc] ? "" : `Add your ${SERVICE_NAMES[svc]} key in Settings first.`;
+  const needsAi = o.files.includes("summary") || o.translate.length;
+  const ai = S.settings.ai_provider === "local" ? "local" : "claude";
+  $("#cfAiWarn").textContent = !needsAi ? ""
+    : ai === "claude" ? (S.hasKey ? "" : "Summaries and translation need your Claude key, or switch to the free local model in Settings.")
+    : (S.ollama.running && S.ollama.hasModel ? "" : "Summaries and translation need the local model. Set it up in Settings.");
+  $("#cfChoose").disabled = o.dest !== "folder";
+}
+$("#createModal").addEventListener("change", cfCheck);
+$("#cfChoose").onclick = async () => { try { const r = await api("/api/pick", { kind: "dest" }); if (r.dir) { cfDir = r.dir; $("#cfDir").textContent = r.dir; } } catch (e) { toast(e.message); } };
+$("#cfCancel").onclick = async () => { if (!createDefaultsOnly) await api("/api/pending/clear", {}); closeModal("#createModal"); refresh(); };
+$("#cfStart").onclick = async () => {
+  try {
+    const r = await api("/api/start", { opts: cfOpts(), remember: $("#cfRemember").checked, dontAsk: $("#cfDontAsk").closest("label").hidden ? null : $("#cfDontAsk").checked, defaultsOnly: createDefaultsOnly });
+    closeModal("#createModal");
+    toast(createDefaultsOnly ? "Choices saved" : `Started ${r.added} clip${r.added === 1 ? "" : "s"}`);
+    settingsLoaded = false; refresh();
+  } catch (e) { toast(e.message, 4000); }
+};
+
 let namesTimer;
 $("#names").oninput = () => { clearTimeout(namesTimer); namesTimer = setTimeout(async () => { await api("/api/names", { text: $("#names").value }); toast("Names saved"); }, 700); };
 $("#saveKey").onclick = async () => {
