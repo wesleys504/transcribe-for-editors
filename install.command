@@ -17,7 +17,7 @@ echo
 read -r -p "Press Return to continue, or close this window to cancel. " _
 
 mkdir -p "$APP_HOME/app/ui" "$APP_HOME/bin" "$APP_HOME/models" "$APP_HOME/Watch Folder"
-cp "$SRC/transcribe.py" "$SRC/app.py" "$SRC/projects.py" "$SRC/icon.png" "$APP_HOME/app/"
+cp "$SRC/transcribe.py" "$SRC/app.py" "$SRC/projects.py" "$SRC/voices.py" "$SRC/icon.png" "$APP_HOME/app/"
 cp "$SRC/ui/index.html" "$APP_HOME/app/ui/index.html"
 rm -rf "$APP_HOME/app/dnr" && cp -R "$SRC/dnr" "$APP_HOME/app/dnr"
 
@@ -108,8 +108,8 @@ cat > "$APP/Contents/Info.plist" <<PL
   <key>CFBundleName</key><string>Transcribe</string>
   <key>CFBundleDisplayName</key><string>Transcribe</string>
   <key>CFBundleIdentifier</key><string>local.transcribe.app</string>
-  <key>CFBundleVersion</key><string>3.1</string>
-  <key>CFBundleShortVersionString</key><string>3.1</string>
+  <key>CFBundleVersion</key><string>3.2</string>
+  <key>CFBundleShortVersionString</key><string>3.2</string>
   <key>NSHumanReadableCopyright</key><string>© 2026 TBD Media Post. Free for personal, noncommercial use.</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>Transcribe</string>

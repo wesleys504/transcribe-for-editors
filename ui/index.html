@@ -241,6 +241,22 @@
   .pick-list label { display: flex; gap: 10px; align-items: center; padding: 8px 2px; border-top: 1px solid var(--line); }
   .pick-list input { width: auto; }
   .pick-list .k { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .voice-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius-s); }
+  .voice-row:hover { background: var(--raised); }
+  .voice-row .t { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .voice-row .k { color: var(--muted); font-size: 11px; grid-column: 1; }
+  .voice-row .k.cloned { color: var(--ok); }
+  .voice-row .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; }
+  .voice-row .acts button { padding: 2px 8px; font-size: 12px; }
+  .chk.s-synth .ic { color: var(--caption); }
+  .chk.s-synth .q { font-style: italic; }
+  .chk .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .chk .acts button { padding: 3px 9px; font-size: 12px; }
+  .synth-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #1a1600; background: var(--caption);
+    border-radius: 3px; padding: 0 5px; margin-right: 6px; font-style: normal; }
+  .consent { background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 12px 14px; margin: 12px 0; }
+  .logbox { white-space: pre-wrap; font: 12px/1.6 "SF Mono", ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--radius-s); padding: 10px 12px; max-height: 50vh; overflow: auto; }
   @media (max-width: 980px) { .ws-body { grid-template-columns: 190px minmax(0, 1fr) 290px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
   @media (max-width: 720px) { .row { grid-template-columns: 1fr; } .row .actions { justify-content: flex-start; } .spk { grid-template-columns: 1fr; } }
@@ -280,7 +296,7 @@
     <div id="projects" hidden></div>
     <div id="log" class="log" hidden></div>
   </div>
-  <footer class="credit">Transcribe 3.1. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
+  <footer class="credit">Transcribe 3.2. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
 </div>
 
 
@@ -298,6 +314,9 @@
       <h4>Clips <span class="more"><button class="quiet" data-more aria-label="Add clips">+ Add</button><span class="menu">
         <button id="wsFromRecent">From Recent…</button><button id="wsTranscribe">Transcribe new clips…</button></span></span></h4>
       <div id="wsClips"></div>
+      <h4>Voices <span class="more"><button class="quiet" data-more aria-label="Voice options">•••</button><span class="menu">
+        <button id="wsVoiceLog">Generated-voice log…</button><button id="wsVoiceHelp">How cloned voices work</button></span></span></h4>
+      <div id="wsVoices"></div>
       <h4>Notes for the assistant</h4>
       <textarea id="wsNotes" placeholder="Audience, tone, length, names to spell right. The assistant reads this every time."></textarea>
     </nav>
@@ -464,7 +483,7 @@ VO: Narration line.
 
   <h3>About</h3>
   <div class="field">
-    <div class="hint">Transcribe 3.1<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Name fixes, summaries and translation by Claude or a free local model. Audio cleanup on this Mac or by ElevenLabs, Auphonic or ai-coustics. Dialogue, music and effects separation by the BandIt Plus model (Watcharasupat et al.), run on this Mac.</div>
+    <div class="hint">Transcribe 3.2<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Name fixes, summaries and translation by Claude or a free local model. Audio cleanup on this Mac or by ElevenLabs, Auphonic or ai-coustics. Dialogue, music and effects separation by the BandIt Plus model (Watcharasupat et al.), run on this Mac.</div>
   </div>
 </aside>
 
@@ -545,6 +564,35 @@ VO: Narration line.
   <div class="foot">
     <button class="quiet" id="pickCancel">Cancel</button>
     <button class="primary" id="pickAdd">Add to project</button>
+  </div>
+</div>
+
+
+<div class="modal narrow" id="cloneModal" role="dialog" aria-modal="true" aria-labelledby="cloneTitle">
+  <h2 id="cloneTitle">Clone a voice</h2>
+  <p class="sub" id="cloneSub"></p>
+  <div id="clonePlan" class="hint"></div>
+  <div class="consent">
+    <label class="choice"><input type="checkbox" id="cloneAgree" /> <span id="cloneAgreeText"></span></label>
+    <div class="field" style="margin:8px 0 0"><label for="cloneBy">Who gave permission, and how</label>
+      <input id="cloneBy" placeholder="e.g. Amy Chen, appearance release signed Nov 3" /></div>
+  </div>
+  <label class="choice"><input type="checkbox" id="cloneNoise" /> <span>Remove background noise first<div class="hint">Only if the interview has noise and you didn't make clean audio or stems.</div></span></label>
+  <p class="hint">Every line made with this voice is marked as synthetic: in the script, in Check bites, in Word exports, in the file name, and in the project's log. ElevenLabs keeps the voice in your account until you remove it here.</p>
+  <div class="warn" id="cloneWarn"></div>
+  <div class="foot">
+    <button class="quiet" id="cloneCancel">Cancel</button>
+    <button class="primary" id="cloneGo" disabled>Clone voice</button>
+  </div>
+</div>
+
+<div class="modal" id="logModal" role="dialog" aria-modal="true" aria-labelledby="logTitle">
+  <h2 id="logTitle">Generated-voice log</h2>
+  <p class="sub">Every voice cloned and every line generated in this project, with who gave permission. Share it with your producer or network if they ask.</p>
+  <div class="logbox" id="logText"></div>
+  <div class="foot">
+    <button class="quiet" id="logCopy">Copy</button>
+    <button class="primary" id="logClose">Done</button>
   </div>
 </div>
 
@@ -631,7 +679,7 @@ function renderSpend() {
   const m = S.usage.this_month;
   $("#spendBtn").textContent = `Claude this month: ${money(m.usd)}`;
   $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`
-    + (Object.keys(m.services || {}).length ? `<br><br>Audio processed this month: ${Object.entries(m.services).map(([k, v]) => `${esc(k === "stems" ? "Stems (on this Mac)" : S.cleanupServices[k] || k)} ${v.toFixed(1)} min`).join(", ")}.` : "");
+    + (Object.keys(m.services || {}).length ? `<br><br>Audio processed this month: ${Object.entries(m.services).map(([k, v]) => `${esc(k === "stems" ? "Stems (on this Mac)" : k === "elevenlabs_voice" ? "ElevenLabs cloned voice" : S.cleanupServices[k] || k)} ${v.toFixed(1)} min`).join(", ")}.` : "");
 }
 function renderHeader() {
   renderSpend();
@@ -879,6 +927,8 @@ document.addEventListener("click", (e) => { if (!e.target.closest(".more")) clos
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if ($("#pickModal").classList.contains("open")) { closeModal("#pickModal"); return; }
+  if ($("#cloneModal").classList.contains("open")) { closeModal("#cloneModal"); return; }
+  if ($("#logModal").classList.contains("open")) { closeModal("#logModal"); return; }
   if ($("#namer").classList.contains("open")) closeNamer();
   else if ($("#createModal").classList.contains("open")) $("#cfCancel").click();
   else if ($("#trModal").classList.contains("open")) closeModal("#trModal");
@@ -1018,7 +1068,7 @@ async function loadProject(id, quiet) {
   if (!quiet) $("#wsNotes").value = v.notes || "";
   $("#newScriptMenu").innerHTML = Object.entries(v.types).map(([k, n]) => `<button data-wsnew="${k}">${esc(n)}</button>`).join("");
   $("#edType").innerHTML = Object.entries(v.types).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
-  renderScriptList(); renderClipList();
+  renderScriptList(); renderClipList(); renderVoices();
   WS.waiting = v.clips.some((c) => c.exists && !c.ready);
   $("#chatModel").textContent = S && S.settings.ai_provider === "local" ? `Local: ${S.settings.local_model}` : (S ? (S.settings.claude_model || "").replace("claude-", "Claude ").replace(/-(\d)-(\d)$/, " $1.$2").replace("sonnet", "Sonnet").replace("haiku", "Haiku").replace("opus", "Opus") : "");
 }
@@ -1066,6 +1116,8 @@ function updateStats(st) {
   const parts = [`${words} words`];
   if (bites) parts.push(`${bites} soundbite${bites === 1 ? "" : "s"}${st && st.bite_secs ? `, ${fmtDur(st.bite_secs)}` : ""}`);
   if (vo) parts.push(`VO ${vo} words, about ${fmtDur(vo / 150 * 60)} read`);
+  const syn = body.split("\n").filter((l) => /^\s*SYNTH\s+[^:]+:/i.test(l)).length;
+  if (syn) parts.push(`${syn} generated line${syn === 1 ? "" : "s"}`);
   if (st && (st.bite_secs || vo)) parts.push(`total about ${fmtDur(st.bite_secs + vo / 150 * 60)}`);
   $("#edStats").textContent = parts.join(" · ");
 }
@@ -1173,16 +1225,21 @@ function renderChecks() {
   const r = WS.results; const el = $("#checks");
   if (!r.results.length) { el.innerHTML = `<div class="top"><strong>No soundbites found.</strong><button class="quiet" id="chkClose">Close</button></div>
       <div class="hint">Write them as: A001 [01:02:03:04 - 01:02:09:12] AMY: "exact words"</div>`; el.classList.add("open"); $("#chkClose").onclick = () => el.classList.remove("open"); return; }
-  const icon = { ok: "✓", tc: "!", close: "≈", missing: "✕", clip: "?" };
+  const icon = { ok: "✓", tc: "!", close: "≈", missing: "✕", clip: "?", synth: "◆" };
   const fixable = r.results.filter((x) => x.status === "tc" || x.status === "close").length;
   const bad = r.results.filter((x) => x.status === "missing" || x.status === "clip").length;
   const good = r.results.filter((x) => x.status === "ok").length;
-  el.innerHTML = `<div class="top"><strong>${good} of ${r.results.length} soundbites match the transcripts exactly${bad ? `. ${bad} can't be found` : ""}.</strong>
+  const synth = r.results.filter((x) => x.status === "synth").length;
+  const real = r.results.length - synth;
+  el.innerHTML = `<div class="top"><strong>${real ? `${good} of ${real} soundbites match the transcripts exactly${bad ? `. ${bad} can't be found` : ""}` : "No real soundbites"}${synth ? `. ${synth} generated voice line${synth === 1 ? "" : "s"}` : ""}.</strong>
       ${fixable ? `<button class="primary" id="chkFix">Fix ${fixable}</button>` : ""}<button class="quiet" id="chkClose">Close</button></div>`
     + r.results.map((x, i) => `<div class="chk s-${x.status}" data-chkline="${x.line}">
       <span class="ic">${icon[x.status]}</span>
-      ${x.path ? `<button class="play" data-chkplay="${i}" aria-label="Play this soundbite">▶</button>` : "<span></span>"}
-      <div><div class="q">${esc(x.clip)} “${esc(x.quote)}”</div><div class="n">${esc(x.note)}${x.fix_quote ? ` Transcript: “${esc(x.fix_quote)}”` : ""}${x.status === "tc" ? ` (${esc(x.fix_tin)} - ${esc(x.fix_tout)})` : ""}</div></div></div>`).join("");
+      ${x.path || x.file ? `<button class="play" data-chkplay="${i}" aria-label="Play this line">▶</button>` : "<span></span>"}
+      <div>${x.status === "synth" ? `<div class="q"><span class="synth-tag">SYNTHETIC</span>${esc(x.who)} “${esc(x.quote)}”</div>` : `<div class="q">${esc(x.clip)} “${esc(x.quote)}”</div>`}
+        <div class="n">${esc(x.note)}${x.fix_quote ? ` Transcript: “${esc(x.fix_quote)}”` : ""}${x.status === "tc" ? ` (${esc(x.fix_tin)} - ${esc(x.fix_tout)})` : ""}</div>
+        ${x.status === "synth" && x.voice ? `<div class="acts"><button data-synthsay="${i}">${x.file ? "Make again" : "Make it"}</button><button data-synthrec="${i}" title="Pick a recording of you reading the line. It keeps your timing and emphasis.">From my read…</button>${x.file ? `<button class="quiet" data-synthshow="${i}">Show in Finder</button>` : ""}</div>` : ""}
+        ${x.status === "synth" && !x.voice ? `<div class="acts"><button data-synthclone="${esc(x.who)}">Clone ${esc(x.who)}'s voice…</button></div>` : ""}</div></div>`).join("");
   el.classList.add("open");
   $("#chkClose").onclick = () => el.classList.remove("open");
   const f = $("#chkFix"); if (f) f.onclick = fixBites;
@@ -1203,11 +1260,13 @@ $("#checks").addEventListener("click", (e) => {
     const x = WS.results.results[Number(pb.dataset.chkplay)]; const p = $("#player");
     document.querySelectorAll("#checks .play.on").forEach((b) => { b.classList.remove("on"); b.textContent = "▶"; });
     if (p.dataset.src === "chk" + pb.dataset.chkplay && !p.paused) { p.pause(); return; }
-    p.src = `/api/snippet?path=${encodeURIComponent(x.path)}&start=${x.start}&end=${x.end}`; p.dataset.src = "chk" + pb.dataset.chkplay;
+    p.src = x.file ? `/api/audio?path=${encodeURIComponent(x.file)}&v=${Date.now()}` : `/api/snippet?path=${encodeURIComponent(x.path)}&start=${x.start}&end=${x.end}`; p.dataset.src = "chk" + pb.dataset.chkplay;
     p.play().catch(() => toast("Couldn't play that soundbite")); pb.classList.add("on"); pb.textContent = "■";
     p.onended = () => { pb.classList.remove("on"); pb.textContent = "▶"; };
     return;
   }
+  const sb = e.target.closest("[data-synthsay],[data-synthrec],[data-synthshow],[data-synthclone]");
+  if (sb) { synthAction(sb); return; }
   const row = e.target.closest("[data-chkline]"); if (!row) return;
   const b = $("#edBody"); const lines = b.value.split("\n"); const n = Number(row.dataset.chkline);
   const start = lines.slice(0, n).reduce((a, l) => a + l.length + 1, 0);
@@ -1275,6 +1334,104 @@ $("#ws").addEventListener("click", async (e) => {
   } catch (err) { toast(err.message, 4000); }
 });
 document.addEventListener("click", (e) => { const t = e.target.closest("[data-wsopen]"); if (t) openWs(t.dataset.wsopen).catch((err) => toast(err.message)); });
+
+// ---------------- cloned voices
+function renderVoices() {
+  const v = WS.view.voices; if (!v) return;
+  const names = [...new Set([...Object.keys(v.speakers), ...Object.keys(v.cloned)])];
+  $("#wsVoices").innerHTML = names.length ? names.map((n) => {
+    const c = v.cloned[n];
+    return `<div class="voice-row"><span class="t">${esc(n)}</span>
+      <span class="k ${c ? "cloned" : ""}">${c ? "Voice cloned" + (c.needs_verification ? ", needs verifying at elevenlabs.io" : "") : `${fmtDur(v.speakers[n] || 0)} of speech`}</span>
+      <span class="acts">${c ? `<button data-vline="${esc(n)}" title="Add a generated line for ${esc(n)} at the cursor">+ Line</button><button class="quiet" data-vforget="${esc(n)}" aria-label="Remove ${esc(n)}'s cloned voice">×</button>`
+        : `<button data-vclone="${esc(n)}">Clone…</button>`}</span></div>`;
+  }).join("") : `<div class="hint" style="padding:0 8px">Name the speakers in your clips to clone a voice for pickup lines.</div>`;
+}
+let cloneName = "";
+async function openClone(name) {
+  cloneName = name;
+  $("#cloneTitle").textContent = `Clone ${name}'s voice`;
+  $("#cloneSub").textContent = "For pickup lines: a missing word, a sentence cut off, a line they approved. Uses ElevenLabs.";
+  $("#cloneAgreeText").textContent = `${name} has agreed to having their voice cloned and used for this project.`;
+  $("#cloneAgree").checked = false; $("#cloneBy").value = ""; $("#cloneNoise").checked = false; $("#cloneWarn").textContent = "";
+  $("#clonePlan").textContent = "Finding their cleanest lines…";
+  $("#cloneModal").classList.add("open"); $("#scrim").classList.add("open");
+  try {
+    const plan = await api("/api/voice/plan", { project: WS.id, name });
+    const src = plan.sources.includes("stem_dialogue") ? "dialogue stems" : plan.sources.includes("clean") ? "clean audio" : "the clips' audio";
+    $("#clonePlan").textContent = plan.enough
+      ? `Transcribe will send ${fmtDur(plan.secs)} of ${name} talking alone, in ${plan.segments} pieces from ${plan.clips} clip${plan.clips === 1 ? "" : "s"}, taken from ${src}.`
+      : `Only ${fmtDur(plan.secs)} of ${name} talking alone. Cloning needs at least 0:30. Add more of their clips.`;
+    if (!WS.view.voices.hasKey) $("#cloneWarn").textContent = "Add your ElevenLabs key in Settings first.";
+    WS.clonePlanOk = plan.enough && WS.view.voices.hasKey;
+  } catch (e) { $("#clonePlan").textContent = e.message; WS.clonePlanOk = false; }
+  cloneCheck();
+}
+function cloneCheck() { $("#cloneGo").disabled = !(WS.clonePlanOk && $("#cloneAgree").checked && $("#cloneBy").value.trim()); }
+["change", "input"].forEach((ev) => $("#cloneModal").addEventListener(ev, cloneCheck));
+$("#cloneCancel").onclick = () => closeModal("#cloneModal");
+$("#cloneGo").onclick = async () => {
+  $("#cloneGo").disabled = true; $("#cloneGo").textContent = "Cloning…";
+  try {
+    await api("/api/voice/clone", { project: WS.id, name: cloneName, agreed: $("#cloneAgree").checked, consent_by: $("#cloneBy").value, remove_noise: $("#cloneNoise").checked });
+    closeModal("#cloneModal"); toast(`${cloneName}'s voice is ready. Add a line with + Line.`, 4000);
+    await loadProject(WS.id, true); if (WS.results) runCheck(false);
+  } catch (e) { $("#cloneWarn").textContent = e.message; }
+  finally { $("#cloneGo").textContent = "Clone voice"; cloneCheck(); }
+};
+function insertLine(name) {
+  const b = $("#edBody"); if (!WS.script) { toast("Open a script first"); return; }
+  const pos = lastSel.end || b.value.length;
+  const lineStart = b.value.lastIndexOf("\n", pos - 1) + 1;
+  const atLineStart = pos === lineStart;
+  const ins = (atLineStart ? "" : "\n") + `SYNTH ${name.toUpperCase()}: ""` + "\n";
+  b.value = b.value.slice(0, pos) + ins + b.value.slice(pos);
+  const caret = pos + ins.length - 2;
+  b.focus(); b.setSelectionRange(caret, caret); scheduleSave(); updateStats();
+  toast("Type the line between the quotes, then Check bites to make it", 4000);
+}
+async function synthAction(btn) {
+  const i = Number(btn.dataset.synthsay ?? btn.dataset.synthrec ?? btn.dataset.synthshow ?? -1);
+  if (btn.dataset.synthclone) { openClone(btn.dataset.synthclone); return; }
+  const x = WS.results.results[i]; if (!x) return;
+  if (btn.dataset.synthshow !== undefined) { api("/api/open", { path: x.file, reveal: true }); return; }
+  await flushSave();
+  const label = btn.textContent; btn.disabled = true; btn.textContent = "Making…";
+  try {
+    const r = await api(btn.dataset.synthsay !== undefined ? "/api/voice/say" : "/api/voice/record", { project: WS.id, name: x.who, text: x.quote });
+    if (!r.file) return;
+    toast(`Saved ${base(r.file)}`, 3500);
+    await runCheck(false);
+    const again = WS.results.results.findIndex((y) => y.line === x.line); const pb = again >= 0 && $(`[data-chkplay="${again}"]`); if (pb) pb.click();
+    refresh().catch(() => {});
+  } catch (e) { toast(e.message, 5000); }
+  finally { btn.disabled = false; btn.textContent = label; }
+}
+$("#wsVoices").addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  try {
+    if (t.dataset.vclone) openClone(t.dataset.vclone);
+    else if (t.dataset.vline) insertLine(t.dataset.vline);
+    else if (t.dataset.vforget) {
+      if (t.dataset.armed !== "1") { t.dataset.armed = "1"; t.textContent = "Remove?"; setTimeout(() => { t.dataset.armed = ""; t.textContent = "×"; }, 4000); return; }
+      await api("/api/voice/forget", { project: WS.id, name: t.dataset.vforget }); toast("Voice removed here and at ElevenLabs. Files you made stay."); await loadProject(WS.id, true);
+    }
+  } catch (err) { toast(err.message, 4000); }
+});
+$("#wsVoiceLog").onclick = async () => {
+  closeMenus();
+  const r = await api("/api/voice/log", { project: WS.id });
+  $("#logText").textContent = r.text || "Nothing yet. Cloned voices and generated lines show up here.";
+  $("#logModal").classList.add("open"); $("#scrim").classList.add("open");
+};
+$("#wsVoiceHelp").onclick = () => {
+  closeMenus();
+  $("#logTitle").textContent = "How cloned voices work";
+  $("#logText").textContent = "1. Name the speakers in your clips (Name speakers).\n2. Under Voices, choose Clone… and record who gave permission.\n3. Choose + Line, or type a line like:\n   SYNTH AMY: \"and that's when we knew.\"\n4. Check bites lists it as SYNTHETIC. Choose Make it to generate it from the text,\n   or From my read… to pick a recording of you saying it (keeps your timing).\n5. The WAV is saved in Transcribe/Generated audio/<project>, named with SYNTHETIC.\n\nGenerated lines are never counted as soundbites, and Word exports mark them in red.";
+  $("#logModal").classList.add("open"); $("#scrim").classList.add("open");
+};
+$("#logClose").onclick = () => { closeModal("#logModal"); $("#logTitle").textContent = "Generated-voice log"; };
+$("#logCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#logText").textContent); toast("Copied"); } catch { toast("Couldn't copy"); } };
 
 refresh();
 setInterval(() => { if (tab !== "recent" && tab !== "projects" && !WS.open) refresh().catch(() => {}); }, 1000);

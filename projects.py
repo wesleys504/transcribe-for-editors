@@ -293,6 +293,10 @@ Other lines:
 - Section headings start with "## ".
 - Narration or VO lines start with "VO: ".
 - Editor notes go in square brackets, like [B-ROLL: crowd outside] or [MUSIC: builds] or [SUPER: Opening night, 2019].
+Generated (cloned-voice) lines:
+- Only when the editor explicitly asks for a pickup or generated line, write it as SYNTH NAME: "text", for example SYNTH AMY: "and that's when we knew."
+- Never present a generated line as something the person said, never write one on your own initiative, and keep it as close to
+  their real words and meaning as possible. In your reply, say it's a generated line that needs the person's OK.
 """
 
 TYPE_GUIDES = {
@@ -574,7 +578,7 @@ def apply_fixes(body, results):
 
 def stats(body, results=None):
     """Runtime of soundbites plus read time of VO, for the status line under the editor."""
-    bite_secs = sum(r.get("secs", 0) for r in (results or []) if r.get("status") != "missing")
+    bite_secs = sum(r.get("secs", 0) for r in (results or []) if r.get("status") not in ("missing", "synth", "clip"))
     vo_words = 0
     for line in body.split("\n"):
         if BITE.match(line):
@@ -583,7 +587,8 @@ def stats(body, results=None):
         if s.upper().startswith("VO:"):
             vo_words += len(s[3:].split())
     words = len(re.findall(r"\b\w+\b", body))
-    return {"bites": sum(1 for line in body.split("\n") if BITE.match(line)), "bite_secs": bite_secs,
+    synth = sum(1 for line in body.split("\n") if re.match(r'\s*SYNTH\s+[^:]+:', line))
+    return {"bites": sum(1 for line in body.split("\n") if BITE.match(line)), "bite_secs": bite_secs, "synth": synth,
             "vo_words": vo_words, "vo_secs": vo_words / 150 * 60, "words": words}
 
 
@@ -621,6 +626,14 @@ def export_docx(pid, sid, folder):
             if m["who"]:
                 para.add_run(m["who"].strip().upper() + "   ").bold = True
             para.add_run(f"“{m['q'].strip()}”")
+        elif re.match(r'\s*SYNTH\s+[^:]+:', line):
+            who, said = line.strip()[6:].split(":", 1)
+            para = doc.add_paragraph()
+            r = para.add_run(f"SYNTHETIC VOICE ({who.strip().upper()}), NOT RECORDED   ")
+            r.bold = True
+            r.font.size = Pt(9)
+            r.font.color.rgb = RGBColor(0xC8, 0x45, 0x3A)
+            para.add_run(said.strip()).italic = True
         elif line.startswith("## "):
             doc.add_heading(line[3:].strip(), level=2)
         elif line.strip().upper().startswith("VO:"):

@@ -9,7 +9,7 @@ A Mac app for editors that transcribes your clips on your own computer. Drop cli
 - **Clean audio** (`Clip - clean.wav`): a cleaned-up dialogue track exactly as long as the clip, so it drops in and stays in sync
 - **Dialogue, music and effects stems** (`Clip - dialogue.wav`, `Clip - music.wav`, `Clip - effects.wav`): the clip's mix split three ways, each exactly as long as the clip
 
-It also has **Projects**: group clips and write paper edits, VO scripts and promos next to them, with an assistant that has read the transcripts. Every soundbite in a script is checked against what was actually said.
+It also has **Projects**: group clips and write paper edits, VO scripts and promos next to them, with an assistant that has read the transcripts. Every soundbite in a script is checked against what was actually said. For pickup lines, you can clone a speaker's voice with ElevenLabs, with their permission recorded, and every generated line is clearly marked.
 
 Every feature has a free option. Transcription always runs on your Mac with Whisper. Name fixes, summaries and translation use either **Claude** (best quality, about a cent per transcript) or a **free local model** through Ollama. Audio cleanup runs **on your Mac for free**, or through **ElevenLabs**, **Auphonic** or **ai-coustics** if you have an account.
 
@@ -63,6 +63,32 @@ The status line shows soundbite runtime and VO read time (about 150 words a minu
 
 The assistant uses whichever AI you chose in Settings. With Claude, it reads about 30,000 words of transcript per project, roughly 3 to 4 hours of interviews. On Sonnet, the first request on a full project costs up to about 15¢. Follow-ups within a few minutes cost much less, because Claude keeps the transcripts cached. Each reply shows its cost. With the free local model, it reads about 4,000 words (around 25 minutes of interview), so it suits short projects. When a project is bigger than the assistant can read, it tells you how much it saw.
 
+## Cloned voices for pickup lines
+
+For the line that isn't there: a word that got stepped on, a sentence cut off, a line the person approved. Cloned voices use ElevenLabs and need a plan that includes voice cloning (Starter and up).
+
+1. Name the speakers in your clips (**Name speakers**). Only named people can be cloned.
+2. In a project, under **Voices**, choose **Clone…** next to the person. Transcribe picks 30 seconds to 2½ minutes of their cleanest solo speech from the project's clips. It uses dialogue stems or clean audio when you've made them.
+3. Tick that they've agreed, and type who gave permission and how (for example, *appearance release signed Nov 3*). Cloning won't start without both.
+4. Choose **+ Line**, or type a line in the script:
+
+   ```
+   SYNTH AMY: "and that's when we knew."
+   ```
+
+5. **Check bites** lists it as **SYNTHETIC**. Choose **Make it** to generate it from the text, or **From my read…** to pick a recording of you saying the line. That one keeps your timing and emphasis and usually sounds more natural.
+
+The WAV (48 kHz, 24-bit) is saved in `Transcribe/Generated audio/<project>`, and its name always contains `SYNTHETIC`. You'll still need to match room tone and mic color in your mix.
+
+**What keeps it honest:**
+- Generated lines are never counted as soundbites.
+- Word exports mark them in red as *SYNTHETIC VOICE, NOT RECORDED*.
+- **Voices → ••• → Generated-voice log** lists every voice cloned and every line made, with who gave permission, ready to send to a producer or network.
+- The assistant writes a SYNTH line only when you ask for one, and it says so when it does.
+- Removing a voice (×) deletes it from your ElevenLabs account too. Files you've made stay.
+
+Many networks and clients require disclosure or sign-off for synthetic dialogue. Check their standards before you deliver.
+
 If two clips have the same name (like `A001.mov` from two camera cards) and you save to one folder, the second gets its folder name added, so nothing is overwritten.
 
 ## The free options
@@ -88,6 +114,7 @@ Add your keys in **Settings**. They're stored in your Mac's Keychain, never in t
 | ElevenLabs Voice Isolator | pulling voices out of noise or music | your ElevenLabs credits |
 | Auphonic | noise and reverb reduction, leveling, broadcast loudness | 2 free hours a month, then paid |
 | ai-coustics | studio-style speech enhancement | paid, with a free trial |
+| ElevenLabs voice cloning | pickup lines in a cloned voice, with permission | your ElevenLabs credits (Starter plan or higher) |
 | Claude, in Projects | the script assistant | up to about 15¢ a request on a big project, less on follow-ups |
 
 Auphonic and ai-coustics also level the audio to broadcast loudness (-23 LUFS). Adobe Podcast's Enhance Speech isn't included because Adobe doesn't offer a public API for it.

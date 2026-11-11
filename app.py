@@ -25,6 +25,10 @@ _pspec = importlib.util.spec_from_file_location("projects", APP_DIR / "projects.
 P = importlib.util.module_from_spec(_pspec)
 _pspec.loader.exec_module(P)
 P.bind(T)
+_vspec = importlib.util.spec_from_file_location("voices", APP_DIR / "voices.py")
+V = importlib.util.module_from_spec(_vspec)
+_vspec.loader.exec_module(V)
+V.bind(T, P)
 
 IS_MAC = platform.system() == "Darwin"
 AGENT = "com.transcribe.watchfolder"
@@ -459,11 +463,11 @@ def project_api(path, b):
     if path == "/api/script/chat":
         return P.chat(pid, b["id"], b.get("message", ""), b.get("selection", ""))
     if path == "/api/script/check":
-        res = P.check(pid, b.get("body", ""))
+        res = checked(pid, b.get("body", ""))
         return {"results": res, "stats": P.stats(b.get("body", ""), res)}
     if path == "/api/script/fix":
         body = P.apply_fixes(b.get("body", ""), P.check(pid, b.get("body", "")))
-        res = P.check(pid, body)
+        res = checked(pid, body)
         return {"body": body, "results": res, "stats": P.stats(body, res)}
     if path == "/api/script/export":
         folder = b.get("dir") or (pick("dest") or [""])[0]
@@ -471,6 +475,35 @@ def project_api(path, b):
             return {"path": ""}
         out = P.export_docx(pid, b["id"], folder)
         return {"path": out}
+    raise RuntimeError("Unknown request.")
+
+
+def checked(pid, body):
+    """Soundbite checks plus generated-voice lines, in script order."""
+    res = P.check(pid, body) + V.check_lines(P.load(pid), body)
+    return sorted(res, key=lambda r: r["line"])
+
+
+def voice_api(path, b):
+    pid, name = b.get("project"), b.get("name", "")
+    if path == "/api/voice/plan":
+        return V.sample_plan(pid, name)
+    if path == "/api/voice/clone":
+        if not b.get("agreed"):
+            raise RuntimeError("Confirm that you have permission to clone this voice.")
+        return V.clone(pid, name, b.get("consent_by", ""), b.get("consent_note", ""), bool(b.get("remove_noise")))
+    if path == "/api/voice/forget":
+        V.forget(pid, name)
+        return {"ok": True}
+    if path == "/api/voice/say":
+        return V.say(pid, V.canonical(P.load(pid), name), b.get("text", ""))
+    if path == "/api/voice/record":
+        got = b.get("file") or (pick("files") or [""])[0]
+        if not got:
+            return {"file": ""}
+        return V.say_like(pid, V.canonical(P.load(pid), name), b.get("text", ""), got)
+    if path == "/api/voice/log":
+        return {"text": V.log_text(P.load(pid))}
     raise RuntimeError("Unknown request.")
 
 
@@ -520,7 +553,15 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/projects":
                 return self._send(200, {"items": P.list_projects(), "types": P.SCRIPT_TYPES})
             if u.path == "/api/project":
-                return self._send(200, P.project_view(q.get("id", "")))
+                v = P.project_view(q.get("id", ""))
+                pr = P.load(v["id"])
+                v["voices"] = {"speakers": V.speakers(pr), "cloned": pr.get("voices", {}), "hasKey": bool(T.get_secret("elevenlabs"))}
+                return self._send(200, v)
+            if u.path == "/api/audio":   # play a generated line (only files Transcribe made)
+                f = Path(q.get("path", "")).resolve()
+                if f.suffix.lower() != ".wav" or T.HOME.resolve() not in f.parents and not f.name.count(" - SYNTHETIC - "):
+                    return self._send(403, {"error": "not allowed"})
+                return self._send(200, f.read_bytes(), "audio/wav")
             if u.path == "/api/script":
                 pr = P.load(q.get("project", ""))
                 s = P._script(pr, q.get("id", ""))
@@ -570,6 +611,8 @@ class Handler(BaseHTTPRequestHandler):
                     paths = list(PENDING); PENDING.clear()
                 added, found = enqueue(paths, opts)
                 return self._send(200, {"added": added, "found": found})
+            if u.path.startswith("/api/voice/"):
+                return self._send(200, voice_api(u.path, b))
             if u.path.startswith("/api/project") or u.path.startswith("/api/script"):
                 return self._send(200, project_api(u.path, b))
             if u.path == "/api/pending/clear":
