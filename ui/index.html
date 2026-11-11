@@ -56,6 +56,7 @@
   /* drop zone */
   .drop { margin: 4px 22px 14px; border: 1.5px dashed var(--line); border-radius: var(--radius-l);
     display: flex; align-items: center; gap: 18px; padding: 18px 22px; transition: border-color .15s, background .15s; }
+  .drop[hidden] { display: none; }
   .drop.big { flex-direction: column; justify-content: center; padding: 64px 22px; text-align: center; }
   .drop.hover { border-color: var(--caption); background: color-mix(in srgb, var(--caption) 7%, transparent); }
   .drop .say { flex: 1; }
@@ -164,6 +165,83 @@
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line);
     padding: 8px 14px; border-radius: var(--radius-s); display: none; }
   .toast.show { display: block; }
+
+  /* ---------------- projects + script workspace */
+  .proj-new { display: flex; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+  .proj-new input { max-width: 340px; }
+  .ws [hidden] { display: none !important; }
+  .ws { position: fixed; inset: 0; background: var(--bg); display: none; grid-template-rows: auto 1fr; }
+  .ws.open { display: grid; }
+  .ws-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .ws-head input { font-size: 15px; font-weight: 650; border-color: transparent; background: transparent; max-width: 420px; padding: 4px 8px; }
+  .ws-head input:hover { border-color: var(--line); }
+  .ws-head .spacer { flex: 1; }
+  .ws-body { display: grid; grid-template-columns: 230px minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
+  .ws-side { border-right: 1px solid var(--line); overflow: auto; padding: 14px 14px 20px; }
+  .ws-side h4 { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 650; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted); margin: 16px 0 8px; }
+  .ws-side h4:first-child { margin-top: 0; }
+  .ws-item { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 7px 8px; border-radius: var(--radius-s); }
+  .ws-item:hover { background: var(--raised); border-color: transparent; }
+  .ws-item.on { background: var(--raised); border-color: var(--line); }
+  .ws-item .t { display: block; font-weight: 550; overflow: hidden; text-overflow: ellipsis; }
+  .ws-item .k { display: block; color: var(--muted); font-size: 11px; }
+  .clip-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; padding: 6px 8px; border-radius: var(--radius-s); }
+  .clip-row:hover { background: var(--raised); }
+  .clip-row .t { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clip-row .k { color: var(--muted); font-size: 11px; grid-column: 1; }
+  .clip-row .k.wait { color: var(--caption); }
+  .clip-row button { grid-row: 1 / span 2; grid-column: 2; padding: 2px 6px; opacity: 0; }
+  .clip-row:hover button, .clip-row button:focus-visible { opacity: 1; }
+  .ws-side textarea { min-height: 90px; font-size: 12px; }
+  .ws-main { display: grid; grid-template-rows: auto 1fr auto auto; min-height: 0; min-width: 0; }
+  .ed-bar { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .ed-bar input { flex: 1; min-width: 110px; font-weight: 600; }
+  .ed-bar select { width: auto; max-width: 150px; }
+  #edBody { border: none; border-radius: 0; resize: none; min-height: 0; height: 100%; padding: 16px 20px; background: var(--bg);
+    font: 13px/1.75 "SF Mono", ui-monospace, Menlo, monospace; }
+  #edBody:focus-visible { outline: none; }
+  .ed-stats { display: flex; gap: 14px; padding: 7px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+  .ed-stats .spacer { flex: 1; }
+  .checks { max-height: 34vh; overflow: auto; border-top: 1px solid var(--line); padding: 4px 16px 10px; display: none; }
+  .checks.open { display: block; }
+  .checks .top { display: flex; align-items: center; gap: 10px; padding: 8px 0; position: sticky; top: 0; background: var(--bg); }
+  .checks .top strong { flex: 1; }
+  .chk { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .chk .ic { font-weight: 700; }
+  .chk.s-ok .ic { color: var(--ok); } .chk.s-tc .ic, .chk.s-close .ic { color: var(--caption); } .chk.s-missing .ic, .chk.s-clip .ic { color: var(--bad); }
+  .chk .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chk .n { color: var(--muted); font-size: 12px; }
+  .chk .play { width: 26px; height: 26px; border-radius: 50%; padding: 0; font-size: 11px; }
+  .chk .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .ws-empty { display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
+  .ws-empty .buttons { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .chat { border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--panel); }
+  .chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .chat-head strong { flex: 1; }
+  .chat-head .k { color: var(--muted); font-size: 11px; }
+  .msgs { overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 92%; padding: 9px 12px; border-radius: 12px; white-space: pre-wrap; line-height: 1.5; }
+  .msg.user { align-self: flex-end; background: var(--raised); border: 1px solid var(--line); border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg .meta { display: flex; gap: 10px; align-items: center; margin-top: 6px; color: var(--muted); font-size: 11px; white-space: normal; }
+  .msg .meta button { padding: 2px 8px; font-size: 11px; }
+  .msg.thinking { color: var(--muted); }
+  .msg.err { color: var(--bad); }
+  .starters { display: flex; flex-direction: column; gap: 6px; }
+  .starters p { color: var(--muted); margin: 0 0 4px; }
+  .starters button { text-align: left; white-space: normal; }
+  .chat-in { border-top: 1px solid var(--line); padding: 10px 12px 12px; }
+  .chat-in .sel { color: var(--caption); font-size: 11px; margin-bottom: 6px; display: none; }
+  .chat-in .sel.on { display: block; }
+  .chat-in textarea { min-height: 64px; max-height: 30vh; resize: none; }
+  .chat-in .row2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .chat-in .row2 .k { flex: 1; color: var(--muted); font-size: 11px; }
+  .pick-list { max-height: 50vh; overflow: auto; }
+  .pick-list label { display: flex; gap: 10px; align-items: center; padding: 8px 2px; border-top: 1px solid var(--line); }
+  .pick-list input { width: auto; }
+  .pick-list .k { color: var(--muted); font-size: 12px; margin-left: auto; }
+  @media (max-width: 980px) { .ws-body { grid-template-columns: 190px minmax(0, 1fr) 290px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
   @media (max-width: 720px) { .row { grid-template-columns: 1fr; } .row .actions { justify-content: flex-start; } .spk { grid-template-columns: 1fr; } }
 </style>
@@ -193,15 +271,67 @@
     <div class="tabs" role="tablist">
       <button class="on" data-tab="queue">Queue</button>
       <button data-tab="recent">Recent</button>
+      <button data-tab="projects">Projects</button>
       <button data-tab="log">Activity</button>
       <button class="quiet right" id="clearBtn">Clear finished</button>
     </div>
     <div id="queue"></div>
     <div id="recent" hidden></div>
+    <div id="projects" hidden></div>
     <div id="log" class="log" hidden></div>
   </div>
-  <footer class="credit">Transcribe 3.0. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
+  <footer class="credit">Transcribe 3.1. &copy; 2026 TBD Media Post. Free for personal, noncommercial use.</footer>
 </div>
+
+
+<section class="ws" id="ws" aria-label="Project">
+  <div class="ws-head">
+    <button id="wsBack">← Projects</button>
+    <input id="wsName" aria-label="Project name" />
+    <div class="spacer"></div>
+    <button class="quiet" id="wsDelete">Delete project</button>
+  </div>
+  <div class="ws-body">
+    <nav class="ws-side">
+      <h4>Scripts <span class="more"><button class="quiet" data-more aria-label="New script">+ New</button><span class="menu" id="newScriptMenu"></span></span></h4>
+      <div id="wsScripts"></div>
+      <h4>Clips <span class="more"><button class="quiet" data-more aria-label="Add clips">+ Add</button><span class="menu">
+        <button id="wsFromRecent">From Recent…</button><button id="wsTranscribe">Transcribe new clips…</button></span></span></h4>
+      <div id="wsClips"></div>
+      <h4>Notes for the assistant</h4>
+      <textarea id="wsNotes" placeholder="Audience, tone, length, names to spell right. The assistant reads this every time."></textarea>
+    </nav>
+    <div class="ws-main" id="wsMain">
+      <div class="ed-bar">
+        <input id="edTitle" aria-label="Script title" />
+        <select id="edType" aria-label="Script type"></select>
+        <button id="edCheck" title="Check every soundbite against the transcripts">Check bites</button>
+        <button id="edExport" title="Save as a Word document">Export</button>
+        <span class="more"><button class="quiet" data-more aria-label="More">More</button><span class="menu">
+          <button id="edCopy">Copy script</button><button id="edDelete">Delete script</button></span></span>
+      </div>
+      <textarea id="edBody" spellcheck="true" placeholder="Write here, or ask the assistant on the right to start a draft from your transcripts.
+
+Soundbites look like this, so the app can check them:
+A001 [01:02:03:04 - 01:02:09:12] AMY: &quot;Exact words from the transcript.&quot;
+
+## Section heading
+VO: Narration line.
+[B-ROLL: notes in square brackets]"></textarea>
+      <div class="checks" id="checks"></div>
+      <div class="ed-stats"><span id="edStats"></span><span class="spacer"></span><span id="edSaved"></span></div>
+    </div>
+    <aside class="chat" aria-label="Writing assistant">
+      <div class="chat-head"><strong>Assistant</strong><span class="k" id="chatModel"></span><button class="quiet" id="chatClear">Clear</button></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="chat-in">
+        <div class="sel" id="chatSel"></div>
+        <textarea id="chatText" placeholder="Ask for a draft, better bites, a tighter cut…"></textarea>
+        <div class="row2"><span class="k">⌘ Return to send</span><button class="primary" id="chatSend">Send</button></div>
+      </div>
+    </aside>
+  </div>
+</section>
 
 <div class="scrim" id="scrim"></div>
 
@@ -334,7 +464,7 @@
 
   <h3>About</h3>
   <div class="field">
-    <div class="hint">Transcribe 3.0<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Name fixes, summaries and translation by Claude or a free local model. Audio cleanup on this Mac or by ElevenLabs, Auphonic or ai-coustics.</div>
+    <div class="hint">Transcribe 3.1<br>&copy; 2026 TBD Media Post. Free for personal, noncommercial use.<br>Transcription by Whisper, run on this Mac. Name fixes, summaries and translation by Claude or a free local model. Audio cleanup on this Mac or by ElevenLabs, Auphonic or ai-coustics. Dialogue, music and effects separation by the BandIt Plus model (Watcharasupat et al.), run on this Mac.</div>
   </div>
 </aside>
 
@@ -385,6 +515,8 @@
       <label class="choice"><input type="checkbox" value="summary" name="cf" /> <span>Summary and soundbites</span></label>
       <label class="choice"><input type="checkbox" value="clean" name="cf" /> <span>Clean audio (.wav)<div class="hint">Same length as the clip, so it stays in sync</div></span></label>
       <div class="field" id="cleanWithBox" style="margin:6px 0 0 24px"><select id="cfCleanup" aria-label="Clean audio with"></select><div class="warn" id="cfCleanWarn"></div></div>
+      <label class="choice"><input type="checkbox" value="stems" name="cf" /> <span>Dialogue, music &amp; effects stems (.wav)<div class="hint">Three files, same length as the clip. Free, on your Mac. Takes a while on long clips.</div></span></label>
+      <div class="warn" id="cfStemsWarn" style="margin:0 0 6px 24px"></div>
       <div class="warn" id="cfAiWarn"></div>
     </div>
     <div>
@@ -402,6 +534,17 @@
   <div class="foot">
     <button class="quiet" id="cfCancel">Cancel</button>
     <button class="primary" id="cfStart">Start</button>
+  </div>
+</div>
+
+
+<div class="modal narrow" id="pickModal" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
+  <h2 id="pickTitle">Add clips from Recent</h2>
+  <p class="sub">Clips you've transcribed. The assistant reads their transcripts and summaries.</p>
+  <div class="pick-list" id="pickList"></div>
+  <div class="foot">
+    <button class="quiet" id="pickCancel">Cancel</button>
+    <button class="primary" id="pickAdd">Add to project</button>
   </div>
 </div>
 
@@ -488,7 +631,7 @@ function renderSpend() {
   const m = S.usage.this_month;
   $("#spendBtn").textContent = `Claude this month: ${money(m.usd)}`;
   $("#spendDetail").innerHTML = `This month: about ${esc(money(m.usd))} across ${m.requests} requests (${m.input_tokens.toLocaleString()} tokens in, ${m.output_tokens.toLocaleString()} out). All time: about ${esc(money(S.usage.all_time_usd))}.<br>These are estimates from list prices. Your exact bill and remaining credit are at console.anthropic.com under Usage and Billing.`
-    + (Object.keys(m.services || {}).length ? `<br><br>Audio cleanup this month: ${Object.entries(m.services).map(([k, v]) => `${esc(S.cleanupServices[k] || k)} ${v.toFixed(1)} min`).join(", ")}.` : "");
+    + (Object.keys(m.services || {}).length ? `<br><br>Audio processed this month: ${Object.entries(m.services).map(([k, v]) => `${esc(k === "stems" ? "Stems (on this Mac)" : S.cleanupServices[k] || k)} ${v.toFixed(1)} min`).join(", ")}.` : "");
 }
 function renderHeader() {
   renderSpend();
@@ -635,8 +778,10 @@ document.addEventListener("click", async (e) => {
     else if (t.dataset.tab) {
       tab = t.dataset.tab;
       document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.classList.toggle("on", b === t));
-      ["queue", "recent", "log"].forEach((id) => ($("#" + id).hidden = id !== tab));
-      if (tab === "recent") renderRecent(); else refresh();
+      ["queue", "recent", "projects", "log"].forEach((id) => ($("#" + id).hidden = id !== tab));
+      $("#clearBtn").hidden = tab === "projects";
+      $("#drop").hidden = tab === "projects";
+      if (tab === "recent") renderRecent(); else if (tab === "projects") renderProjects(); else refresh();
     }
     closeMenus();
   } catch (err) { toast(err.message, 4000); }
@@ -733,6 +878,7 @@ $("#scrim").onclick = () => {
 document.addEventListener("click", (e) => { if (!e.target.closest(".more")) closeMenus(); });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if ($("#pickModal").classList.contains("open")) { closeModal("#pickModal"); return; }
   if ($("#namer").classList.contains("open")) closeNamer();
   else if ($("#createModal").classList.contains("open")) $("#cfCancel").click();
   else if ($("#trModal").classList.contains("open")) closeModal("#trModal");
@@ -804,6 +950,7 @@ function cfCheck() {
   $("#cfCleanWarn").textContent = !o.files.includes("clean") ? ""
     : svc === "local" ? (S.localCleanup ? "" : "On-Mac cleanup needs an Apple Silicon Mac.")
     : S.keys[svc] ? "" : `Add your ${SERVICE_NAMES[svc]} key in Settings first.`;
+  $("#cfStemsWarn").textContent = o.files.includes("stems") && !S.stems ? "Stems need an Apple Silicon Mac. Run the installer again to add them." : "";
   const needsAi = o.files.includes("summary") || o.translate.length;
   const ai = S.settings.ai_provider === "local" ? "local" : "claude";
   $("#cfAiWarn").textContent = !needsAi ? ""
@@ -830,8 +977,308 @@ $("#saveKey").onclick = async () => {
   catch (e) { toast(e.message, 4000); }
 };
 
+
+// ---------------- projects + scripts
+const WS = { open: false, id: null, view: null, script: null, undo: [], saveT: null, busy: false, waiting: false, results: null };
+const STARTERS = {
+  paper: ["Build a 3-minute string-out from the strongest bites", "Find every bite about the menu", "Tighten this to 90 seconds", "What's missing from this story?"],
+  vo: ["Write a 60-second VO from these interviews", "Make this easier to read aloud", "Give me three opening lines"],
+  promo: ["Cut a 30-second promo with a strong hook", "Give me five hooks I could open on", "Make a 15-second social version"],
+  free: ["Outline the story these interviews tell", "Write follow-up interview questions", "Draft a YouTube title and description"],
+};
+const fmtDur = (s) => { s = Math.round(s || 0); const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, "0")}`; };
+const ago = (t) => new Date(t * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+async function renderProjects() {
+  const { items } = await api("/api/projects");
+  $("#projects").innerHTML = `<div class="proj-new"><input id="projName" placeholder="New project name, like Chef Doc or Spring Promo" />
+      <button class="primary" id="projCreate">New project</button></div>`
+    + (items.length ? items.map((p) => `<div class="row done">
+      <div><div class="name">${esc(p.name)}</div><div class="where">${p.clips} clip${p.clips === 1 ? "" : "s"} · ${p.scripts} script${p.scripts === 1 ? "" : "s"}</div></div>
+      <div><div class="status">${esc(ago(p.updated))}</div></div>
+      <div class="actions"><button class="primary" data-wsopen="${esc(p.id)}">Open</button></div></div>`).join("")
+      : `<div class="empty">A project holds clips and the scripts you write from them: paper edits, VO, promos, anything. Make one above.</div>`);
+  $("#projCreate").onclick = createProject;
+  $("#projName").onkeydown = (e) => { if (e.key === "Enter") createProject(); };
+}
+async function createProject() {
+  try { const p = await api("/api/project/create", { name: $("#projName").value }); openWs(p.id); }
+  catch (e) { toast(e.message); }
+}
+async function openWs(id) {
+  WS.open = true; WS.id = id; WS.script = null; WS.results = null;
+  $("#ws").classList.add("open");
+  await loadProject(id);
+  if (WS.view.scripts.length) openScript(WS.view.scripts[0].id); else showNoScript();
+}
+async function loadProject(id, quiet) {
+  const v = await api("/api/project?id=" + id);
+  WS.view = v;
+  if (!quiet || document.activeElement !== $("#wsName")) $("#wsName").value = v.name;
+  if (!quiet) $("#wsNotes").value = v.notes || "";
+  $("#newScriptMenu").innerHTML = Object.entries(v.types).map(([k, n]) => `<button data-wsnew="${k}">${esc(n)}</button>`).join("");
+  $("#edType").innerHTML = Object.entries(v.types).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
+  renderScriptList(); renderClipList();
+  WS.waiting = v.clips.some((c) => c.exists && !c.ready);
+  $("#chatModel").textContent = S && S.settings.ai_provider === "local" ? `Local: ${S.settings.local_model}` : (S ? (S.settings.claude_model || "").replace("claude-", "Claude ").replace(/-(\d)-(\d)$/, " $1.$2").replace("sonnet", "Sonnet").replace("haiku", "Haiku").replace("opus", "Opus") : "");
+}
+function renderScriptList() {
+  const v = WS.view;
+  $("#wsScripts").innerHTML = v.scripts.length ? v.scripts.map((s) => `<button class="ws-item ${WS.script && WS.script.id === s.id ? "on" : ""}" data-wsscript="${esc(s.id)}">
+      <span class="t">${esc(s.title)}</span><span class="k">${esc(v.types[s.type])}</span></button>`).join("")
+    : `<div class="hint" style="padding:0 8px">No scripts yet.</div>`;
+}
+function renderClipList() {
+  const v = WS.view;
+  $("#wsClips").innerHTML = v.clips.length ? v.clips.map((c) => `<div class="clip-row" title="${esc(c.path)}">
+      <span class="t">${esc(c.label)}</span>
+      <span class="k ${c.ready ? "" : "wait"}">${!c.exists ? "Clip moved or deleted" : c.ready ? `${fmtDur(c.secs)}${c.speakers.length ? " · " + esc(c.speakers.join(", ")) : c.nspeakers > 1 ? ` · ${c.nspeakers} speakers` : ""}` : "Not transcribed yet"}</span>
+      <button class="quiet" data-wsrmclip="${esc(c.path)}" aria-label="Remove ${esc(c.label)} from the project">×</button></div>`).join("")
+    : `<div class="hint" style="padding:0 8px">Add clips so the assistant can quote them.</div>`;
+}
+function showNoScript() {
+  WS.script = null; renderScriptList();
+  $("#wsMain").querySelectorAll(".ed-bar, #edBody, .checks, .ed-stats").forEach((el) => (el.hidden = true));
+  let e = $("#wsEmpty");
+  if (!e) { e = document.createElement("div"); e.id = "wsEmpty"; e.className = "ws-empty"; $("#wsMain").appendChild(e); }
+  e.hidden = false; e.style.gridRow = "1 / -1";
+  e.innerHTML = `<div><strong>Start a script</strong><div class="hint">Pick a kind. You can change it later.</div>
+    <div class="buttons">${Object.entries(WS.view.types).map(([k, n]) => `<button data-wsnew="${k}">${esc(n)}</button>`).join("")}</div></div>`;
+  $("#msgs").innerHTML = ""; $("#chatText").disabled = true; $("#chatSend").disabled = true;
+}
+async function openScript(sid) {
+  await flushSave();
+  const s = await api(`/api/script?project=${WS.id}&id=${sid}`);
+  WS.script = s; WS.undo = []; WS.results = null;
+  const e = $("#wsEmpty"); if (e) e.hidden = true;
+  $("#wsMain").querySelectorAll(".ed-bar, #edBody, .ed-stats").forEach((el) => (el.hidden = false));
+  $("#checks").hidden = false; $("#checks").classList.remove("open");
+  $("#edTitle").value = s.title; $("#edType").value = s.type; $("#edBody").value = s.body;
+  $("#chatText").disabled = false; $("#chatSend").disabled = false;
+  $("#edSaved").textContent = "Saved";
+  renderScriptList(); renderChat(); updateStats(); updateSel();
+}
+function updateStats(st) {
+  const body = $("#edBody").value;
+  const words = (body.match(/\b\w+\b/g) || []).length;
+  const bites = body.split("\n").filter((l) => /\[\s*\d{1,2}:\d{2}:\d{2}(?:[:;.]\d{2})?\s*[-–—]\s*\d{1,2}:\d{2}:\d{2}(?:[:;.]\d{2})?\s*\]/.test(l) && /["“].+["”]\s*$/.test(l)).length;
+  const vo = body.split("\n").filter((l) => /^\s*VO:/i.test(l)).reduce((n, l) => n + l.replace(/^\s*VO:/i, "").trim().split(/\s+/).filter(Boolean).length, 0);
+  const parts = [`${words} words`];
+  if (bites) parts.push(`${bites} soundbite${bites === 1 ? "" : "s"}${st && st.bite_secs ? `, ${fmtDur(st.bite_secs)}` : ""}`);
+  if (vo) parts.push(`VO ${vo} words, about ${fmtDur(vo / 150 * 60)} read`);
+  if (st && (st.bite_secs || vo)) parts.push(`total about ${fmtDur(st.bite_secs + vo / 150 * 60)}`);
+  $("#edStats").textContent = parts.join(" · ");
+}
+function scheduleSave() {
+  $("#edSaved").textContent = "Editing…";
+  clearTimeout(WS.saveT); WS.saveT = setTimeout(flushSave, 700);
+}
+async function flushSave() {
+  clearTimeout(WS.saveT); WS.saveT = null;
+  if (!WS.script) return;
+  const body = $("#edBody").value, title = $("#edTitle").value, type = $("#edType").value;
+  if (body === WS.script.body && title === WS.script.title && type === WS.script.type) { $("#edSaved").textContent = "Saved"; return; }
+  try {
+    await api("/api/script/save", { project: WS.id, id: WS.script.id, title, body, type });
+    Object.assign(WS.script, { body, title, type }); $("#edSaved").textContent = "Saved";
+    const item = WS.view.scripts.find((x) => x.id === WS.script.id); if (item) { item.title = title; item.type = type; renderScriptList(); }
+  } catch (e) { $("#edSaved").textContent = "Couldn't save: " + e.message; }
+}
+$("#edBody").addEventListener("input", () => { scheduleSave(); updateStats(WS.results && WS.results.stats); });
+$("#edTitle").addEventListener("input", scheduleSave);
+$("#edType").addEventListener("change", () => { flushSave(); renderChat(); });
+$("#wsName").addEventListener("change", async () => { try { await api("/api/project/update", { id: WS.id, name: $("#wsName").value }); toast("Renamed"); } catch (e) { toast(e.message); } });
+let notesT;
+$("#wsNotes").addEventListener("input", () => { clearTimeout(notesT); notesT = setTimeout(() => api("/api/project/update", { id: WS.id, notes: $("#wsNotes").value }).then(() => toast("Notes saved")).catch((e) => toast(e.message)), 800); });
+
+// selection → the assistant can rewrite just that part
+function selection() { const b = $("#edBody"); return b.value.slice(b.selectionStart, b.selectionEnd); }
+let lastSel = { start: 0, end: 0, text: "" };
+function updateSel() {
+  const b = $("#edBody");
+  if (document.activeElement === b) lastSel = { start: b.selectionStart, end: b.selectionEnd, text: selection() };
+  const w = lastSel.text.trim() ? lastSel.text.trim().split(/\s+/).length : 0;
+  $("#chatSel").classList.toggle("on", w > 0);
+  $("#chatSel").innerHTML = w ? `Using your selection (${w} word${w === 1 ? "" : "s"}). <button class="quiet" id="selClear" style="padding:0 4px">Don't</button>` : "";
+  const c = $("#selClear"); if (c) c.onclick = () => { lastSel = { start: 0, end: 0, text: "" }; updateSel(); };
+}
+["select", "keyup", "mouseup"].forEach((ev) => $("#edBody").addEventListener(ev, updateSel));
+
+function markUndo() {   // only the latest change can be undone, one step at a time
+  WS.script.chat.forEach((x) => (x.undoable = false));
+  const top = WS.undo[WS.undo.length - 1];
+  if (top && WS.script.chat[top.index]) WS.script.chat[top.index].undoable = true;
+}
+function renderChat(thinking, err) {
+  const s = WS.script; if (!s) return;
+  const m = $("#msgs");
+  let h = s.chat.map((x, i) => `<div class="msg ${x.role}">${esc(x.text)}${x.role === "assistant" && (x.edit && x.edit !== "none" || x.cost) ? `<div class="meta">
+      ${x.edit && x.edit !== "none" ? `<span>${x.edit === "append" ? "Added to the script" : x.edit === "replace_selection" ? "Rewrote your selection" : "Rewrote the script"}</span>` : ""}
+      ${x.undoable ? `<button data-wsundo="${i}">Undo</button>` : ""}${x.cost ? `<span>${money(x.cost)}</span>` : ""}</div>` : ""}</div>`).join("");
+  if (!s.chat.length && !thinking) {
+    h = `<div class="starters"><p>The assistant has read the transcripts${WS.view.clips.some((c) => c.ready) ? "" : " (once you add some clips)"}. Try:</p>
+      ${(STARTERS[$("#edType").value] || STARTERS.free).map((q) => `<button data-wsstarter="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+  }
+  if (thinking) h += `<div class="msg assistant thinking" id="thinking">Thinking…</div>`;
+  if (err) h += `<div class="msg assistant err">${esc(err)}</div>`;
+  m.innerHTML = h; m.scrollTop = m.scrollHeight;
+}
+async function sendChat(text) {
+  const msg = (text ?? $("#chatText").value).trim();
+  if (!msg || WS.busy || !WS.script) return;
+  await flushSave();
+  WS.busy = true; $("#chatSend").disabled = true;
+  const sel = lastSel.text.trim() ? lastSel : null;
+  WS.script.chat.push({ role: "user", text: msg }); $("#chatText").value = "";
+  renderChat(true);
+  const t0 = Date.now(); const tick = setInterval(() => { const el = $("#thinking"); if (el) el.textContent = `Thinking… ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
+  try {
+    const r = await api("/api/script/chat", { project: WS.id, id: WS.script.id, message: msg, selection: sel ? sel.text : "" });
+    const a = { role: "assistant", text: r.reply, edit: r.edit, cost: r.cost };
+    if (r.edit !== "none") {
+      const b = $("#edBody"); const before = b.value;
+      if (r.edit === "replace_all") b.value = r.text.trim() + "\n";
+      else if (r.edit === "append") b.value = before.replace(/\s*$/, "") + (before.trim() ? "\n\n" : "") + r.text.trim() + "\n";
+      else if (r.edit === "replace_selection" && sel && before.slice(sel.start, sel.end) === sel.text) b.value = before.slice(0, sel.start) + r.text.trim() + before.slice(sel.end);
+      else b.value = before.replace(/\s*$/, "") + "\n\n" + r.text.trim() + "\n";
+      WS.undo.push({ index: WS.script.chat.length, body: before });
+      lastSel = { start: 0, end: 0, text: "" }; updateSel();
+      await flushSave(); updateStats();
+      runCheck(true);
+    }
+    WS.script.chat.push(a);
+    markUndo(); renderChat();
+    if (r.context && r.context.total && r.context.shown < r.context.total) toast(`The assistant read ${r.context.shown} of ${r.context.total} transcript lines (the rest didn't fit).`, 5000);
+    refresh().catch(() => {});
+  } catch (e) {
+    renderChat(false, e.message);
+  } finally { clearInterval(tick); WS.busy = false; $("#chatSend").disabled = false; }
+}
+$("#chatSend").onclick = () => sendChat();
+$("#chatText").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendChat(); } });
+$("#chatClear").onclick = async () => { if (!WS.script) return; await api("/api/script/clearchat", { project: WS.id, id: WS.script.id }); WS.script.chat = []; WS.undo = []; renderChat(); };
+
+// soundbite check
+async function runCheck(quiet) {
+  if (!WS.script) return;
+  try {
+    const r = await api("/api/script/check", { project: WS.id, body: $("#edBody").value });
+    WS.results = r; updateStats(r.stats);
+    const bad = r.results.filter((x) => x.status !== "ok").length;
+    if (quiet && !bad) { $("#checks").classList.remove("open"); return; }
+    renderChecks();
+  } catch (e) { if (!quiet) toast(e.message); }
+}
+function renderChecks() {
+  const r = WS.results; const el = $("#checks");
+  if (!r.results.length) { el.innerHTML = `<div class="top"><strong>No soundbites found.</strong><button class="quiet" id="chkClose">Close</button></div>
+      <div class="hint">Write them as: A001 [01:02:03:04 - 01:02:09:12] AMY: "exact words"</div>`; el.classList.add("open"); $("#chkClose").onclick = () => el.classList.remove("open"); return; }
+  const icon = { ok: "✓", tc: "!", close: "≈", missing: "✕", clip: "?" };
+  const fixable = r.results.filter((x) => x.status === "tc" || x.status === "close").length;
+  const bad = r.results.filter((x) => x.status === "missing" || x.status === "clip").length;
+  const good = r.results.filter((x) => x.status === "ok").length;
+  el.innerHTML = `<div class="top"><strong>${good} of ${r.results.length} soundbites match the transcripts exactly${bad ? `. ${bad} can't be found` : ""}.</strong>
+      ${fixable ? `<button class="primary" id="chkFix">Fix ${fixable}</button>` : ""}<button class="quiet" id="chkClose">Close</button></div>`
+    + r.results.map((x, i) => `<div class="chk s-${x.status}" data-chkline="${x.line}">
+      <span class="ic">${icon[x.status]}</span>
+      ${x.path ? `<button class="play" data-chkplay="${i}" aria-label="Play this soundbite">▶</button>` : "<span></span>"}
+      <div><div class="q">${esc(x.clip)} “${esc(x.quote)}”</div><div class="n">${esc(x.note)}${x.fix_quote ? ` Transcript: “${esc(x.fix_quote)}”` : ""}${x.status === "tc" ? ` (${esc(x.fix_tin)} - ${esc(x.fix_tout)})` : ""}</div></div></div>`).join("");
+  el.classList.add("open");
+  $("#chkClose").onclick = () => el.classList.remove("open");
+  const f = $("#chkFix"); if (f) f.onclick = fixBites;
+}
+async function fixBites() {
+  const before = $("#edBody").value;
+  try {
+    const r = await api("/api/script/fix", { project: WS.id, body: before });
+    $("#edBody").value = r.body; WS.results = r; WS.undo.push({ index: -1, body: before }); markUndo(); renderChat();
+    await flushSave(); updateStats(r.stats); renderChecks();
+    toast("Soundbites now match the transcripts", 3000);
+  } catch (e) { toast(e.message); }
+}
+$("#edCheck").onclick = () => runCheck(false);
+$("#checks").addEventListener("click", (e) => {
+  const pb = e.target.closest("[data-chkplay]");
+  if (pb) {
+    const x = WS.results.results[Number(pb.dataset.chkplay)]; const p = $("#player");
+    document.querySelectorAll("#checks .play.on").forEach((b) => { b.classList.remove("on"); b.textContent = "▶"; });
+    if (p.dataset.src === "chk" + pb.dataset.chkplay && !p.paused) { p.pause(); return; }
+    p.src = `/api/snippet?path=${encodeURIComponent(x.path)}&start=${x.start}&end=${x.end}`; p.dataset.src = "chk" + pb.dataset.chkplay;
+    p.play().catch(() => toast("Couldn't play that soundbite")); pb.classList.add("on"); pb.textContent = "■";
+    p.onended = () => { pb.classList.remove("on"); pb.textContent = "▶"; };
+    return;
+  }
+  const row = e.target.closest("[data-chkline]"); if (!row) return;
+  const b = $("#edBody"); const lines = b.value.split("\n"); const n = Number(row.dataset.chkline);
+  const start = lines.slice(0, n).reduce((a, l) => a + l.length + 1, 0);
+  b.focus(); b.setSelectionRange(start, start + (lines[n] || "").length);
+  const lh = parseFloat(getComputedStyle(b).lineHeight) || 22; b.scrollTop = Math.max(0, n * lh - b.clientHeight / 3);
+});
+
+$("#edExport").onclick = async () => {
+  await flushSave();
+  try { const r = await api("/api/script/export", { project: WS.id, id: WS.script.id }); if (r.path) { toast("Saved " + base(r.path)); api("/api/open", { path: r.path, reveal: true }); } }
+  catch (e) { toast(e.message, 4000); }
+};
+$("#edCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#edBody").value); toast("Script copied"); } catch { toast("Couldn't copy"); } };
+$("#edDelete").onclick = async () => {
+  if (!WS.script) return;
+  await api("/api/script/delete", { project: WS.id, id: WS.script.id });
+  toast(`Deleted ${WS.script.title}`); WS.script = null;
+  await loadProject(WS.id, true);
+  if (WS.view.scripts.length) openScript(WS.view.scripts[0].id); else showNoScript();
+};
+$("#wsBack").onclick = async () => { await flushSave(); WS.open = false; $("#ws").classList.remove("open"); $("#player").pause(); if (tab === "projects") renderProjects(); };
+$("#wsDelete").onclick = async () => {
+  if (!confirmDelete()) return;
+  await api("/api/project/delete", { id: WS.id }); WS.open = false; $("#ws").classList.remove("open"); toast("Project deleted"); renderProjects();
+};
+let delArmed = 0;
+function confirmDelete() {   // no browser dialogs: press twice within 4 seconds
+  if (Date.now() - delArmed < 4000) return true;
+  delArmed = Date.now(); $("#wsDelete").textContent = "Press again to delete"; setTimeout(() => ($("#wsDelete").textContent = "Delete project"), 4000);
+  return false;
+}
+$("#wsTranscribe").onclick = async () => {
+  closeMenus();
+  try { const r = await api("/api/project/transcribe", { project: WS.id }); if (r.added) { await loadProject(WS.id, true); refresh(); toast(`Added ${r.added} clip${r.added === 1 ? "" : "s"}. They join the assistant once transcribed.`, 4000); } }
+  catch (e) { toast(e.message, 4000); }
+};
+$("#wsFromRecent").onclick = async () => {
+  closeMenus();
+  const { items } = await api("/api/recent");
+  const have = new Set(WS.view.clips.map((c) => c.path));
+  const list = items.filter((r) => r.exists && !have.has(r.path));
+  $("#pickList").innerHTML = list.length ? list.map((r) => `<label><input type="checkbox" value="${esc(r.path)}" /> <span>${esc(r.name)}</span><span class="k">${esc(ago(r.when))}</span></label>`).join("")
+    : `<div class="hint">Nothing new in Recent. Use Transcribe new clips… instead.</div>`;
+  $("#pickModal").classList.add("open"); $("#scrim").classList.add("open");
+};
+$("#pickCancel").onclick = () => closeModal("#pickModal");
+$("#pickAdd").onclick = async () => {
+  const paths = [...document.querySelectorAll("#pickList input:checked")].map((i) => i.value);
+  if (paths.length) { await api("/api/project/clips", { id: WS.id, add: paths }); await loadProject(WS.id, true); renderChat(); }
+  closeModal("#pickModal");
+};
+// workspace clicks (separate data-ws* attributes so the main window's handlers don't catch them)
+$("#ws").addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  try {
+    if (t.dataset.wsscript) openScript(t.dataset.wsscript);
+    else if (t.dataset.wsnew) { closeMenus(); await flushSave(); const s = await api("/api/script/new", { project: WS.id, type: t.dataset.wsnew }); await loadProject(WS.id, true); openScript(s.id); }
+    else if (t.dataset.wsrmclip) { await api("/api/project/clips", { id: WS.id, remove: t.dataset.wsrmclip }); await loadProject(WS.id, true); }
+    else if (t.dataset.wsstarter) sendChat(t.dataset.wsstarter);
+    else if (t.dataset.wsundo !== undefined) {
+      const u = WS.undo.pop(); if (!u) return;
+      $("#edBody").value = u.body; await flushSave(); updateStats(); WS.results = null; $("#checks").classList.remove("open");
+      markUndo(); renderChat(); toast("Undone");
+    }
+  } catch (err) { toast(err.message, 4000); }
+});
+document.addEventListener("click", (e) => { const t = e.target.closest("[data-wsopen]"); if (t) openWs(t.dataset.wsopen).catch((err) => toast(err.message)); });
+
 refresh();
-setInterval(() => { if (tab !== "recent") refresh().catch(() => {}); }, 1000);
+setInterval(() => { if (tab !== "recent" && tab !== "projects" && !WS.open) refresh().catch(() => {}); }, 1000);
+setInterval(() => { if (WS.open) { refresh().catch(() => {}); if (WS.waiting) loadProject(WS.id, true).catch(() => {}); } }, 4000);
 </script>
 </body>
 </html>

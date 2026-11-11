@@ -7,6 +7,9 @@ A Mac app for editors that transcribes your clips on your own computer. Drop cli
 - **A summary** with the topics and the best soundbites with timecodes
 - **Translations** in as many languages as you need, with captions on the same timings
 - **Clean audio** (`Clip - clean.wav`): a cleaned-up dialogue track exactly as long as the clip, so it drops in and stays in sync
+- **Dialogue, music and effects stems** (`Clip - dialogue.wav`, `Clip - music.wav`, `Clip - effects.wav`): the clip's mix split three ways, each exactly as long as the clip
+
+It also has **Projects**: group clips and write paper edits, VO scripts and promos next to them, with an assistant that has read the transcripts. Every soundbite in a script is checked against what was actually said.
 
 Every feature has a free option. Transcription always runs on your Mac with Whisper. Name fixes, summaries and translation use either **Claude** (best quality, about a cent per transcript) or a **free local model** through Ollama. Audio cleanup runs **on your Mac for free**, or through **ElevenLabs**, **Auphonic** or **ai-coustics** if you have an account.
 
@@ -16,12 +19,12 @@ Every feature has a free option. Transcription always runs on your Mac with Whis
 2. Open **Terminal** (Cmd+Space, type "Terminal").
 3. Type `bash ` (with a space), drag **install.command** from the Transcribe folder into the window, and press Return. Press Return again to start.
 
-The first install downloads 2–3 GB and takes 5–15 minutes. Updates take about a minute. When it's done, **Transcribe** opens. It lives in your Applications folder, with a shortcut on your Desktop.
+The first install downloads about 3 GB and takes 5–15 minutes. Updates take about a minute. When it's done, **Transcribe** opens. It lives in your Applications folder, with a shortcut on your Desktop.
 
 ## Using it
 
 - **Drop clips or folders** onto the window, or use **Add clips…** / **Add folder…**.
-- **Create files** opens with each batch. Tick what you want (captions, Word or text transcript, summary, clean audio, translations) and where to save it:
+- **Create files** opens with each batch. Tick what you want (captions, Word or text transcript, summary, clean audio, stems, translations) and where to save it:
   - next to each clip
   - in a **Transcripts** folder next to each clip
   - in **one folder** you choose
@@ -32,6 +35,33 @@ The first install downloads 2–3 GB and takes 5–15 minutes. Updates take abou
 - **More → Translate…** or **More → Write summary** adds those to a clip you've already done. They're saved in the same place as the clip's other files.
 - **Recent** lists everything you've transcribed, so you can open, rename, translate or summarize later.
 - **Watch folder** (top right): anything put in `Transcribe/Watch Folder` in your home folder is processed automatically with your saved choices, even with the app closed.
+
+## Stems
+
+Tick **Dialogue, music & effects stems** in Create files. You get three 48 kHz, 24-bit stereo WAVs next to the clip. Line them up at the clip's start and they stay in sync, because each one is exactly as long as the clip's audio. When you also make captions or a transcript, Transcribe reads the dialogue stem, so music under an interview doesn't confuse it.
+
+Stems run on your Mac for free and need an Apple Silicon Mac. They take a while: plan on several minutes for a 10-minute clip. The Queue shows an estimate. The separation model is BandIt Plus (Watcharasupat et al.), downloaded once by the installer.
+
+## Projects and scripts
+
+1. Open the **Projects** tab and make a project, like *Chef Doc* or *Spring Promo*.
+2. Under **Clips**, choose **+ Add**. Pick clips you've already transcribed (**From Recent**) or new ones (**Transcribe new clips…**).
+3. Under **Scripts**, choose **+ New** and pick a kind: **Paper edit**, **VO / narration**, **Promo / social cut** or **Free writing**.
+4. Write in the middle, or ask the **Assistant** on the right: "Build a 3-minute string-out", "Find every bite about the menu", "Cut a 30-second promo with a strong hook". It writes straight into the script. **Undo** puts it back.
+5. Select part of the script before you ask, and the assistant rewrites just that part.
+6. **Notes for the assistant** is read with every request. Put the audience, tone, length and names that must be spelled right there.
+
+Soundbites are written like this, one per line:
+
+```
+A001 [01:02:03:04 - 01:02:09:12] AMY: "Exact words from the transcript."
+```
+
+**Check bites** compares every soundbite with the transcript. ✓ means the words are exact. ! means the words are right but the timecodes are off. ≈ means the words are close but not exact. ✕ means the words aren't in the transcript. **Fix** swaps in the transcript's exact words and timecodes. Press ▶ to hear a bite, or click a row to jump to it. Checks also run after every assistant edit.
+
+The status line shows soundbite runtime and VO read time (about 150 words a minute). **Export** saves the script as a Word document. Scripts save as you type, in `Transcribe/projects` in your home folder.
+
+The assistant uses whichever AI you chose in Settings. With Claude, it reads about 30,000 words of transcript per project, roughly 3 to 4 hours of interviews. On Sonnet, the first request on a full project costs up to about 15¢. Follow-ups within a few minutes cost much less, because Claude keeps the transcripts cached. Each reply shows its cost. With the free local model, it reads about 4,000 words (around 25 minutes of interview), so it suits short projects. When a project is bigger than the assistant can read, it tells you how much it saw.
 
 If two clips have the same name (like `A001.mov` from two camera cards) and you save to one folder, the second gets its folder name added, so nothing is overwritten.
 
@@ -58,10 +88,11 @@ Add your keys in **Settings**. They're stored in your Mac's Keychain, never in t
 | ElevenLabs Voice Isolator | pulling voices out of noise or music | your ElevenLabs credits |
 | Auphonic | noise and reverb reduction, leveling, broadcast loudness | 2 free hours a month, then paid |
 | ai-coustics | studio-style speech enhancement | paid, with a free trial |
+| Claude, in Projects | the script assistant | up to about 15¢ a request on a big project, less on follow-ups |
 
 Auphonic and ai-coustics also level the audio to broadcast loudness (-23 LUFS). Adobe Podcast's Enhance Speech isn't included because Adobe doesn't offer a public API for it.
 
-**Settings → Spending** shows estimated Claude costs and how many minutes you've sent to each audio service.
+**Settings → Spending** shows estimated Claude costs and how many minutes of audio went to each service.
 
 ## If something goes wrong
 
@@ -70,6 +101,10 @@ The **Activity** tab shows what happened. The full log is in `Transcribe/transcr
 ## Uninstall
 
 Turn off the watch folder, then delete `Transcribe` from your home folder and from Applications.
+
+## Credits
+
+Dialogue, music and effects separation uses the BandIt Plus model by Karn Watcharasupat and colleagues, through Roman Solovyev's Music-Source-Separation-Training code (MIT License, see `dnr/LICENSE-MSST.txt`). The model weights are downloaded from that project's release page.
 
 ## License
 

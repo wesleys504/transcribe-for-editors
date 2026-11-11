@@ -559,7 +559,7 @@ def ollama_pull(settings, model, on_progress=None):
     return True
 
 
-def ollama_json(settings, system, text, schema, lead):
+def ollama_json(settings, system, text, schema, lead, ctx=16384):
     body = {
         "model": settings.get("local_model") or "qwen2.5:7b",
         "messages": [
@@ -567,7 +567,7 @@ def ollama_json(settings, system, text, schema, lead):
             {"role": "user", "content": lead + "\n\n" + text + "\n\nReply only with JSON that matches this schema:\n" + json.dumps(schema)},
         ],
         "format": schema, "stream": False,
-        "options": {"temperature": 0, "num_ctx": 16384},
+        "options": {"temperature": 0, "num_ctx": ctx},
     }
     try:
         _, raw, _ = http("POST", ollama_url(settings) + "/api/chat", {"content-type": "application/json"},
@@ -802,6 +802,156 @@ def _clean_aicoustics(flac, key):
             raise RuntimeError("ai-coustics couldn't process it.")
         time.sleep(4)
     raise RuntimeError("ai-coustics took too long; check your ai-coustics dashboard.")
+
+
+
+# ---------------------------------------------------------------- dialogue / music / effects stems
+STEMS_DIR = MODELS / "stems"
+STEM_NAMES = {"speech": "dialogue", "music": "music", "effects": "effects"}
+STEMS_SR = 44100
+STEMS_OUT_SR = 48000
+STEMS_URL = "https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3/"
+STEMS_FILES = {"cfg.yaml": "config_dnr_bandit_bsrnn_multi_mus64.yaml", "bandit.chpt": "model_bandit_plus_dnr_sdr_11.47.chpt"}
+_STEMS_MODEL = {}
+
+
+def stems_available():
+    if not all((STEMS_DIR / f).exists() for f in STEMS_FILES):
+        return False
+    import importlib.util
+    return importlib.util.find_spec("torch") is not None   # don't import it: that takes seconds
+
+
+def load_audio_stereo(path, rate):
+    import av
+    import numpy as np
+    chunks = []
+    with av.open(str(path)) as c:
+        if not c.streams.audio:
+            raise NoAudio("no audio track")
+        res = av.AudioResampler(format="fltp", layout="stereo", rate=rate)
+        for frame in c.decode(c.streams.audio[0]):
+            for out in res.resample(frame):
+                chunks.append(out.to_ndarray())
+        for out in res.resample(None):
+            chunks.append(out.to_ndarray())
+    if not chunks:
+        raise NoAudio("audio track is empty")
+    return np.concatenate(chunks, axis=1).astype(np.float32)
+
+
+def _resample(x, src, dst):
+    """Resample (channels, n) float audio with PyAV."""
+    import av
+    import numpy as np
+    if src == dst:
+        return x
+    res = av.AudioResampler(format="fltp", layout="stereo", rate=dst)
+    out = []
+    step = src * 10
+    for i in range(0, x.shape[1], step):
+        fr = av.AudioFrame.from_ndarray(np.ascontiguousarray(x[:, i:i + step]), format="fltp", layout="stereo")
+        fr.sample_rate = src
+        out += [o.to_ndarray() for o in res.resample(fr)]
+    out += [o.to_ndarray() for o in res.resample(None)]
+    return np.concatenate(out, axis=1)
+
+
+def write_wav24(path, x, rate):
+    """(channels, n) float audio → 24-bit WAV."""
+    import numpy as np
+    import wave as _wave
+    v = np.ascontiguousarray((np.clip(x.T, -1, 1) * 8388607).astype("<i4"))
+    b = v.view(np.uint8).reshape(-1, 4)[:, :3].tobytes()
+    with _wave.open(str(path), "wb") as w:
+        w.setnchannels(x.shape[0]); w.setsampwidth(3); w.setframerate(rate)
+        w.writeframes(b)
+
+
+def _stems_model():
+    if "m" in _STEMS_MODEL:
+        return _STEMS_MODEL["m"], _STEMS_MODEL["dev"], _STEMS_MODEL["cfg"]
+    import torch
+    import yaml
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    from dnr import MultiMaskMultiSourceBandSplitRNNSimple
+    cfg = yaml.safe_load((STEMS_DIR / "cfg.yaml").read_text())
+    model = MultiMaskMultiSourceBandSplitRNNSimple(**cfg["model"])
+    sd = torch.load(STEMS_DIR / "bandit.chpt", map_location="cpu", weights_only=False)
+    model.load_state_dict(sd.get("state_dict", sd) if isinstance(sd, dict) else sd)
+    model.eval()
+    dev = "cpu"
+    if os.environ.get("TRANSCRIBE_STEMS_DEVICE"):
+        dev = os.environ["TRANSCRIBE_STEMS_DEVICE"]
+    elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        dev = "mps"
+    model.to(dev)
+    _STEMS_MODEL.update(m=model, dev=dev, cfg=cfg)
+    return model, dev, cfg
+
+
+def _run_chunks(model, dev, x, chunk, step, on_progress):
+    import numpy as np
+    import torch
+    n = x.shape[1]
+    fade = chunk // 10
+    win = np.ones(chunk, np.float32)
+    win[:fade] = np.linspace(0, 1, fade)
+    win[-fade:] = np.linspace(1, 0, fade)
+    pad = chunk - step
+    xp = np.pad(x, ((0, 0), (pad, pad + chunk)))
+    out = np.zeros((3, 2, xp.shape[1]), np.float32)
+    wsum = np.zeros(xp.shape[1], np.float32)
+    starts = list(range(0, xp.shape[1] - chunk + 1, step))
+    with torch.inference_mode():
+        for k, s in enumerate(starts):
+            y = model(torch.from_numpy(np.ascontiguousarray(xp[None, :, s:s + chunk])).to(dev))[0].float().cpu().numpy()
+            out[:, :, s:s + chunk] += y * win
+            wsum[s:s + chunk] += win
+            on_progress((k + 1) / len(starts))
+    return (out / np.maximum(wsum, 1e-8))[:, :, pad:pad + n]
+
+
+def separate_stems(media, p0=0.02, p1=0.3):
+    """Split a clip's audio into dialogue, music and effects. Returns {name: (2, n) array at 48 kHz},
+    each exactly as long as the clip's audio, so the stems line up with the picture."""
+    import numpy as np
+    if not stems_available():
+        raise RuntimeError("stems aren't installed yet (run the installer again on an Apple Silicon Mac)")
+    progress("Reading audio for stems", p0)
+    x = load_audio_stereo(media, STEMS_SR)
+    secs = x.shape[1] / STEMS_SR
+    n_out = int(round(secs * STEMS_OUT_SR))
+    model, dev, cfg = _stems_model()
+    chunk = int(cfg["audio"]["chunk_size"])
+    step = chunk // 2              # 2x overlap: same quality as 4x in testing, twice as fast
+    log(f"  splitting dialogue, music and effects ({secs / 60:.1f} min, {'GPU' if dev == 'mps' else 'CPU'})…")
+    t0 = time.time()
+
+    def on_progress(f):
+        el = time.time() - t0
+        left = el / f * (1 - f) if f > 0.02 else None
+        msg = "Splitting dialogue, music & effects" + (f" (about {max(1, int(left // 60))} min left)" if left and left > 90 else "")
+        progress(msg, p0 + (p1 - p0) * f)
+
+    try:
+        y = _run_chunks(model, dev, x, chunk, step, on_progress)
+    except Exception as e:
+        if dev == "cpu":
+            raise
+        log(f"  GPU stems failed ({e}); trying the CPU")
+        model.to("cpu"); _STEMS_MODEL["dev"] = "cpu"
+        y = _run_chunks(model, "cpu", x, chunk, step, on_progress)
+    log(f"  stems took {int(time.time() - t0)}s")
+    names = [STEM_NAMES.get(s, s) for s in cfg["training"]["instruments"]]
+    res = {}
+    for k, name in enumerate(names):
+        z = _resample(y[k], STEMS_SR, STEMS_OUT_SR)
+        res[name] = np.stack([_fit(z[0].astype(np.float32), n_out), _fit(z[1].astype(np.float32), n_out)])
+    record_service_usage("stems", secs / 60)
+    return res
 
 
 def clean_audio(media, service):
@@ -1439,7 +1589,7 @@ def out_dir(media, out):
 
 
 def _base_taken(base):
-    return any(Path(f"{base}{sfx}").exists() for sfx in (".srt", " - transcript.docx", " - transcript.txt", " - summary.docx", " - clean.wav"))
+    return any(Path(f"{base}{sfx}").exists() for sfx in (".srt", " - transcript.docx", " - transcript.txt", " - summary.docx", " - clean.wav", " - dialogue.wav"))
 
 
 def resolve_out(media, opts):
@@ -1473,6 +1623,9 @@ def outputs_for(media, tr_codes=None, out=None):
         "sum_docx": Path(f"{base} - summary.docx"),
         "sum_txt": Path(f"{base} - summary.txt"),
         "clean": Path(f"{base} - clean.wav"),
+        "stem_dialogue": Path(f"{base} - dialogue.wav"),
+        "stem_music": Path(f"{base} - music.wav"),
+        "stem_effects": Path(f"{base} - effects.wav"),
     }
     if isinstance(tr_codes, str):
         tr_codes = [tr_codes]
@@ -1547,16 +1700,38 @@ def process(media, settings, opts=None):
             if not want_transcript:
                 raise RuntimeError(f"audio cleanup failed: {e}")
 
+    dialogue = None
+    if "stems" in files:
+        try:
+            stems = separate_stems(media, 0.22 if cleaned is not None else 0.02, 0.45 if cleaned is not None else 0.3)
+            for name, audio_ in stems.items():
+                write_wav24(outs[f"stem_{name}"], audio_, STEMS_OUT_SR)
+            dialogue = stems.get("dialogue")
+            log(f"  stems → {outs['stem_dialogue'].name}, {outs['stem_music'].name}, {outs['stem_effects'].name}")
+        except NoAudio:
+            raise
+        except Exception as e:
+            log(f"  stems failed: {e}")
+            if not want_transcript:
+                raise RuntimeError(f"stems failed: {e}")
+
     if not want_transcript:
-        state = {"media": str(media), "out": out, "audio_only": True, "secs": len(cleaned) / CLEAN_SR,
+        secs = len(cleaned) / CLEAN_SR if cleaned is not None else (dialogue.shape[1] / STEMS_OUT_SR if dialogue is not None else 0)
+        state = {"media": str(media), "out": out, "audio_only": True, "secs": secs,
                  "labels": {}, "words": [], "paras": [], "tc": None, "fps": None, "lang": None, "fixes": 0}
         save_state(state)
         progress("Done", 1.0)
         log(f"  done in {int(time.time() - t0)}s")
         return state
 
-    progress("Reading audio", 0.25 if cleaned is not None else 0.02)
-    if cleaned is not None and settings.get("transcribe_cleaned", True):
+    pre = cleaned is not None or dialogue is not None
+    progress("Reading audio", 0.45 if dialogue is not None else 0.25 if pre else 0.02)
+    if cleaned is None and dialogue is not None and settings.get("transcribe_cleaned", True):
+        import numpy as np
+        mono = dialogue.mean(0)
+        audio = np.interp(np.arange(0, len(mono), STEMS_OUT_SR / SR), np.arange(len(mono)), mono).astype(np.float32)
+        log("  transcribing from the dialogue stem")
+    elif cleaned is not None and settings.get("transcribe_cleaned", True):
         import numpy as np
         audio = np.interp(np.arange(0, len(cleaned), CLEAN_SR / SR), np.arange(len(cleaned)), cleaned).astype(np.float32)
         log("  transcribing from the cleaned audio")
@@ -1567,14 +1742,14 @@ def process(media, settings, opts=None):
 
     turns = []
     if settings["speaker_labels"]:
-        progress("Finding speakers", 0.3 if cleaned is not None else 0.08)
+        progress("Finding speakers", 0.5 if dialogue is not None else 0.3 if pre else 0.08)
         log("  finding speakers…")
         try:
             turns = diarize(audio, settings)
         except Exception as e:
             log(f"  speaker labels failed ({e}); continuing without them")
 
-    progress("Transcribing", 0.35 if cleaned is not None else 0.25)
+    progress("Transcribing", 0.55 if dialogue is not None else 0.35 if pre else 0.25)
     log(f"  transcribing ({engine_name()}, {settings['model']})…")
     words, lang = transcribe_words(audio, settings, names, turns)
     if not words:

@@ -21,6 +21,10 @@ APP_DIR = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("transcribe", APP_DIR / "transcribe.py")
 T = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(T)
+_pspec = importlib.util.spec_from_file_location("projects", APP_DIR / "projects.py")
+P = importlib.util.module_from_spec(_pspec)
+_pspec.loader.exec_module(P)
+P.bind(T)
 
 IS_MAC = platform.system() == "Darwin"
 AGENT = "com.transcribe.watchfolder"
@@ -83,7 +87,7 @@ def receive(paths):
 
 def clean_opts(o, settings):
     d = T.default_opts(settings)
-    files = [f for f in (o.get("files") or []) if f in ("srt", "docx", "txt", "summary", "clean")]
+    files = [f for f in (o.get("files") or []) if f in ("srt", "docx", "txt", "summary", "clean", "stems")]
     tr = [str(t).strip() for t in (o.get("translate") or []) if str(t).strip()]
     dest = o.get("dest") if o.get("dest") in ("beside", "subfolder", "folder") else d["dest"]
     cleanup = o.get("cleanup") if o.get("cleanup") in T.CLEANUP_SERVICES else d["cleanup"]
@@ -95,7 +99,7 @@ def clean_opts(o, settings):
 
 
 def describe_opts(o):
-    names = {"srt": "captions", "docx": "Word transcript", "txt": "text transcript", "summary": "summary", "clean": "clean audio"}
+    names = {"srt": "captions", "docx": "Word transcript", "txt": "text transcript", "summary": "summary", "clean": "clean audio", "stems": "dialogue/music/effects stems"}
     parts = [names[f] for f in o["files"] if f in names]
     if o["translate"]:
         parts.append("translation to " + ", ".join(o["translate"]))
@@ -419,6 +423,57 @@ def open_path(path, reveal=False):
         subprocess.run(["open", "-R", path] if reveal else ["open", path])
 
 
+# ---------------------------------------------------------------- projects and scripts
+def project_api(path, b):
+    pid = b.get("project") or b.get("id") if path.startswith("/api/project") else b.get("project")
+    if path == "/api/project/create":
+        return P.create(b.get("name", ""))
+    if path == "/api/project/update":
+        return P.update(pid, b.get("name"), b.get("notes"))
+    if path == "/api/project/delete":
+        P.remove(pid)
+        return {"ok": True}
+    if path == "/api/project/clips":
+        if b.get("remove"):
+            P.remove_clip(pid, b["remove"])
+        if b.get("add"):
+            P.add_clips(pid, [str(f) for f in T.expand(b["add"])])
+        return P.project_view(pid)
+    if path == "/api/project/transcribe":
+        # pick new clips: they join the project now and go through "Create files" like any drop
+        files = [str(f) for f in T.expand(pick("files"))]
+        if files:
+            P.add_clips(pid, files)
+            receive(files)
+        return {"added": len(files)}
+    if path == "/api/script/new":
+        return P.new_script(pid, b.get("type", "free"), b.get("title", ""))
+    if path == "/api/script/save":
+        return P.save_script(pid, b["id"], b.get("title"), b.get("body"), b.get("type"))
+    if path == "/api/script/delete":
+        P.delete_script(pid, b["id"])
+        return {"ok": True}
+    if path == "/api/script/clearchat":
+        P.clear_chat(pid, b["id"])
+        return {"ok": True}
+    if path == "/api/script/chat":
+        return P.chat(pid, b["id"], b.get("message", ""), b.get("selection", ""))
+    if path == "/api/script/check":
+        res = P.check(pid, b.get("body", ""))
+        return {"results": res, "stats": P.stats(b.get("body", ""), res)}
+    if path == "/api/script/fix":
+        body = P.apply_fixes(b.get("body", ""), P.check(pid, b.get("body", "")))
+        res = P.check(pid, body)
+        return {"body": body, "results": res, "stats": P.stats(body, res)}
+    if path == "/api/script/export":
+        folder = b.get("dir") or (pick("dest") or [""])[0]
+        if not folder:
+            return {"path": ""}
+        out = P.export_docx(pid, b["id"], folder)
+        return {"path": out}
+    raise RuntimeError("Unknown request.")
+
+
 # ---------------------------------------------------------------- HTTP API
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -457,11 +512,19 @@ class Handler(BaseHTTPRequestHandler):
                     "watchDir": str(T.WATCH_DIR), "log": LOG_LINES[-80:], "usage": T.usage_summary(),
                     "pending": [{"path": x, "name": Path(x).name} for x in PENDING],
                     "defaults": T.default_opts(T.load_settings()), "keys": keys_state(),
-                    "cleanupServices": T.CLEANUP_SERVICES, "localCleanup": T.local_cleanup_available(),
+                    "cleanupServices": T.CLEANUP_SERVICES, "localCleanup": T.local_cleanup_available(), "stems": T.stems_available(),
                     "ollama": ollama_state(),
                 })
             if u.path == "/api/recent":
                 return self._send(200, {"items": recent()})
+            if u.path == "/api/projects":
+                return self._send(200, {"items": P.list_projects(), "types": P.SCRIPT_TYPES})
+            if u.path == "/api/project":
+                return self._send(200, P.project_view(q.get("id", "")))
+            if u.path == "/api/script":
+                pr = P.load(q.get("project", ""))
+                s = P._script(pr, q.get("id", ""))
+                return self._send(200, dict(s, project=pr["id"]))
             if u.path == "/api/speakers":
                 v = speakers_view(q.get("path", ""))
                 return self._send(200 if v else 404, v or {"error": "No saved data for that clip."})
@@ -507,6 +570,8 @@ class Handler(BaseHTTPRequestHandler):
                     paths = list(PENDING); PENDING.clear()
                 added, found = enqueue(paths, opts)
                 return self._send(200, {"added": added, "found": found})
+            if u.path.startswith("/api/project") or u.path.startswith("/api/script"):
+                return self._send(200, project_api(u.path, b))
             if u.path == "/api/pending/clear":
                 with LOCK:
                     PENDING.clear()
