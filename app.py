@@ -25,6 +25,11 @@ _pspec = importlib.util.spec_from_file_location("projects", APP_DIR / "projects.
 P = importlib.util.module_from_spec(_pspec)
 _pspec.loader.exec_module(P)
 P.bind(T)
+_nspec = importlib.util.spec_from_file_location("nle", APP_DIR / "nle.py")
+N = importlib.util.module_from_spec(_nspec)
+_nspec.loader.exec_module(N)
+N.bind(T)
+sys.modules.setdefault("nle", N)
 _vspec = importlib.util.spec_from_file_location("voices", APP_DIR / "voices.py")
 V = importlib.util.module_from_spec(_vspec)
 _vspec.loader.exec_module(V)
@@ -230,6 +235,8 @@ def worker():
             if WORK.empty() and IS_MAC:
                 done = sum(1 for j in JOBS.values() if j["status"] == "done")
                 T.notify("Transcribe", f"Finished — {done} transcribed")
+                if T.load_settings().get("done_sound", True):
+                    T.done_sound()
 
 
 # ---------------------------------------------------------------- helpers
@@ -340,7 +347,6 @@ def speakers_view(path):
     st = T.load_state_for(path)
     if not st:
         return None
-    tc_offset = T.tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     out = []
     for k in sorted(st["labels"], key=int):
         num = int(k)
@@ -350,7 +356,7 @@ def speakers_view(path):
         samples = []
         for p in sorted(best, key=lambda p: p["start"]):
             t = T.para_text(st["words"], p)
-            samples.append({"tc": T.fmt_tc(p["start"] + tc_offset, st["fps"]), "start": p["start"],
+            samples.append({"tc": T.src_tc(st, p["start"]), "start": p["start"],
                             "end": min(p["end"], p["start"] + 12), "text": t if len(t) < 220 else t[:217].rsplit(" ", 1)[0] + "…"})
         out.append({"num": num, "label": st["labels"][k], "words": words, "samples": samples})
     used = sorted({v for s in _recent_states() for v in s["labels"].values()} - {f"Speaker {i}" for i in range(1, 30)})
@@ -427,6 +433,19 @@ def open_path(path, reveal=False):
         subprocess.run(["open", "-R", path] if reveal else ["open", path])
 
 
+def export_markers(path, kind):
+    """Sequence of the whole clip at its source timecode, with soundbite or paragraph markers. Saved with the clip's other files."""
+    st = T.load_state_for(path)
+    if not st or not st.get("words"):
+        raise RuntimeError("No saved transcript for that clip.")
+    name, xml, n = N.markers_xml(st, "soundbites" if kind == "soundbites" else "paragraphs")
+    base = T.outputs_for(Path(st["media"]), None, st.get("out"))["srt"].with_suffix("")
+    out = Path(f"{base} - {'soundbite' if kind == 'soundbites' else 'transcript'} markers.xml")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(xml, encoding="utf-8")
+    return {"path": str(out), "markers": n}
+
+
 # ---------------------------------------------------------------- projects and scripts
 def project_api(path, b):
     pid = b.get("project") or b.get("id") if path.startswith("/api/project") else b.get("project")
@@ -475,6 +494,14 @@ def project_api(path, b):
             return {"path": ""}
         out = P.export_docx(pid, b["id"], folder)
         return {"path": out}
+    if path == "/api/script/export_xml":
+        folder = b.get("dir") or (pick("dest") or [""])[0]
+        if not folder:
+            return {"path": ""}
+        body = P._script(P.load(pid), b["id"])["body"]
+        settings = T.load_settings()
+        return P.export_xml(pid, b["id"], folder, checked(pid, body),
+                            handles=int(settings.get("xml_handles", 0)), vo_gaps=bool(settings.get("xml_vo_gaps", True)))
     raise RuntimeError("Unknown request.")
 
 
@@ -659,6 +686,8 @@ class Handler(BaseHTTPRequestHandler):
                 for path in b.get("paths", []):
                     enqueue_translation(path, "", kind="summarize")
                 return self._send(200, {"ok": True})
+            if u.path == "/api/markers":
+                return self._send(200, export_markers(b["path"], b.get("kind", "soundbites")))
             if u.path == "/api/settings":
                 write_settings(b)
                 return self._send(200, {"ok": True})

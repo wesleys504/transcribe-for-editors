@@ -39,7 +39,7 @@ MEDIA_EXTS = {
 SR = 16000
 
 DEFAULTS = {
-    "model": "large-v3-turbo",      # Whisper model
+    "model": "auto",                # Whisper model; "auto" picks per Mac (see whisper_model)
     "language": "auto",             # or "en", "es", ...
     "speakers": "auto",             # or a number, e.g. 2
     "speaker_labels": True,
@@ -56,6 +56,9 @@ DEFAULTS = {
     # --- audio cleanup
     "audio_cleanup": "local",       # local | elevenlabs | auphonic | aicoustics
     "transcribe_cleaned": True,     # transcribe from the cleaned audio when cleaning
+    "done_sound": True,             # play a sound when the queue finishes
+    "xml_handles": 0,               # frames added to each side of every bite in sequence exports
+    "xml_vo_gaps": True,            # leave a hole for VO lines in sequence exports
     # --- which AI does name fixes, summaries and translation
     "ai_provider": "claude",        # claude | local
     "local_model": "qwen2.5:7b",
@@ -84,7 +87,16 @@ def log(msg):
 PROGRESS_HOOK = None  # the app sets this to show progress bars
 
 
+_STAGE = {"name": None, "t": 0.0}
+
+
 def progress(stage, frac):
+    # Log how long each stage took, so slow clips show where the time went.
+    now = time.time()
+    if stage != _STAGE["name"]:
+        if _STAGE["name"] and _STAGE["name"] != "Done":
+            log(f"    {_STAGE['name']}: {now - _STAGE['t']:.1f}s")
+        _STAGE.update(name=stage, t=now)
     if PROGRESS_HOOK:
         try:
             PROGRESS_HOOK(stage, frac)
@@ -99,6 +111,13 @@ def load_settings():
     except (OSError, ValueError):
         pass
     return s
+
+
+def done_sound():
+    """macOS 'Glass' alert, without blocking."""
+    snd = Path("/System/Library/Sounds/Glass.aiff")
+    if platform.system() == "Darwin" and snd.exists():
+        subprocess.Popen(["afplay", str(snd)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def notify(title, text):
@@ -240,21 +259,63 @@ def read_start_timecode(path):
     return None, None
 
 
-def tc_to_seconds(tc, fps):
+# Timecode. Word times are real seconds from the start of the clip. Source timecode counts frames at the
+# nominal rate (24/30/60), so at 23.976/29.97/59.94 a TC "second" isn't a real second: always go through
+# frame counts at the real rate. Drop-frame (";" or ".") applies at nominal 30 and 60.
+def tc_df(tc, fps):
+    return bool(tc and fps) and bool(re.search(r"[;.]\d{2}$", tc)) and round(fps) in (30, 60)
+
+
+def tc_to_frames(tc, fps):
     h, m, s, f = [int(x) for x in re.split(r"[:;.]", tc)]
-    return h * 3600 + m * 60 + s + f / round(fps)
+    nom = round(fps)
+    n = ((h * 60 + m) * 60 + s) * nom + f
+    if tc_df(tc, fps):
+        mins = h * 60 + m
+        n -= (2 * nom // 30) * (mins - mins // 10)
+    return n
 
 
-def fmt_tc(sec, fps=None):
-    """HH:MM:SS:FF when fps is known, else HH:MM:SS."""
+def frames_to_tc(n, fps, df=False):
+    nom = round(fps)
+    n = max(0, int(n))
+    sep = ":"
+    if df and nom in (30, 60):
+        drop = 2 * nom // 30
+        per10, per1 = nom * 600 - drop * 9, nom * 60 - drop
+        d, r = divmod(n, per10)
+        n += drop * 9 * d + (drop * ((r - drop) // per1) if r > drop else 0)
+        sep = ";"
+    h, rem = divmod(n, nom * 3600)
+    m, rem = divmod(rem, nom * 60)
+    s, f = divmod(rem, nom)
+    return f"{h % 24:02d}:{m:02d}:{s:02d}{sep}{f:02d}"
+
+
+def tc_to_seconds(tc, fps):
+    """Real seconds from 00:00:00:00 to this timecode."""
+    return tc_to_frames(tc, fps) / fps
+
+
+def fmt_tc(sec, fps=None, df=False):
+    """HH:MM:SS:FF (HH:MM:SS;FF drop-frame) when fps is known, else HH:MM:SS. `sec` is real seconds."""
     sec = max(0.0, sec)
+    if fps:
+        return frames_to_tc(round(sec * fps), fps, df)
     h, rem = divmod(int(sec), 3600)
     m, s = divmod(rem, 60)
-    if fps:
-        fr = int(round((sec - int(sec)) * round(fps)))
-        fr = min(fr, round(fps) - 1)
-        return f"{h:02d}:{m:02d}:{s:02d}:{fr:02d}"
     return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def tc_offset(st):
+    return tc_to_seconds(st["tc"], st["fps"]) if st.get("tc") and st.get("fps") else 0.0
+
+
+def src_tc(st, sec, frames=True):
+    """Source timecode for a time in this clip (real seconds from the clip's start)."""
+    fps, df = st.get("fps"), tc_df(st.get("tc"), st.get("fps"))
+    t = fmt_tc(sec + tc_offset(st), fps, df)
+    return t if frames or not fps else t[:8]
 
 
 def fmt_srt(sec):
@@ -284,8 +345,69 @@ def engine_name():
     return "faster-whisper"
 
 
+_FW = {}
+
+
+def _physical_cores():
+    """CTranslate2 runs best on physical cores; hyperthreads slow it down."""
+    try:
+        return max(1, int(subprocess.run(["sysctl", "-n", "hw.physicalcpu"], capture_output=True, text=True).stdout))
+    except (ValueError, OSError):
+        return max(1, (os.cpu_count() or 4) // 2)
+
+
+def _fw_model(name):
+    """Load faster-whisper once per app session, not once per clip (loading large-v3-turbo takes a while on Intel)."""
+    if name not in _FW:
+        from faster_whisper import WhisperModel
+        _FW.clear()
+        _FW[name] = WhisperModel(name, device="auto", compute_type="int8", cpu_threads=_physical_cores())
+    return _FW[name]
+
+
+FAST_INTEL = "distil-large-v3"   # English only; several times faster than large-v3-turbo on a CPU
+
+
+_DETECTED = {"lang": None}
+
+
+def whisper_model(settings):
+    """The model to run. "auto": Large v3 Turbo on Apple Silicon (GPU); on Intel (CPU only), Distil Large v3
+    when the clip is English (set in Settings, or detected) and Large v3 Turbo for other languages."""
+    m = settings.get("model") or "auto"
+    if m != "auto":
+        return m
+    if engine_name() == "faster-whisper":
+        lang = settings.get("language")
+        if lang == "en" or (lang == "auto" and _DETECTED["lang"] == "en"):
+            return FAST_INTEL
+    return "large-v3-turbo"
+
+
+def detect_language(audio):
+    """Intel + Auto language: guess the language from the first 30 s with the tiny model (a few seconds),
+    so English clips can use the fast English model."""
+    from faster_whisper import WhisperModel
+    if "tiny" not in _FW_TINY:
+        _FW_TINY["tiny"] = WhisperModel("tiny", device="auto", compute_type="int8", cpu_threads=_physical_cores())
+    _, info = _FW_TINY["tiny"].transcribe(audio[: 30 * SR], vad_filter=True)
+    return info.language
+
+
+_FW_TINY = {}
+
+
 def transcribe_words(audio, settings, names, turns=None):
     eng = engine_name()
+    _DETECTED["lang"] = None
+    if eng == "faster-whisper" and (settings.get("model") or "auto") == "auto" and settings.get("language") == "auto":
+        try:
+            _DETECTED["lang"] = detect_language(audio)
+            log(f"  language looks like: {_DETECTED['lang']}")
+        except Exception as e:
+            log(f"  language check skipped ({e})")
+    name = whisper_model(settings)
+    log(f"  model: {name}")
     lang = None if settings["language"] == "auto" else settings["language"]
     prompt = glossary_prompt(names)
 
@@ -296,7 +418,7 @@ def transcribe_words(audio, settings, names, turns=None):
             "large-v3": "mlx-community/whisper-large-v3-mlx",
             "medium": "mlx-community/whisper-medium-mlx",
             "small": "mlx-community/whisper-small-mlx",
-        }.get(settings["model"], settings["model"])
+        }.get(name, name)
         r = mlx_whisper.transcribe(
             audio, path_or_hf_repo=repo, word_timestamps=True, language=lang,
             initial_prompt=prompt, condition_on_previous_text=False,
@@ -308,10 +430,11 @@ def transcribe_words(audio, settings, names, turns=None):
         ], r.get("language")
 
     if eng == "faster-whisper":
-        from faster_whisper import WhisperModel
-        model = WhisperModel(settings["model"], device="auto", compute_type="int8")
+        model = _fw_model(name)
+        fast = name.startswith("distil")
         segments, info = model.transcribe(
-            audio, word_timestamps=True, language=lang, initial_prompt=prompt,
+            audio, word_timestamps=True, language="en" if fast else lang, initial_prompt=prompt,
+            beam_size=1 if fast else 5,   # distil models are made for greedy decoding
             vad_filter=True, condition_on_previous_text=False, hotwords=prompt,
         )
         words, total = [], max(len(audio) / SR, 1)
@@ -1301,12 +1424,11 @@ def _quote_span(words, para, quote):
 def summarize_state(st, settings):
     if not ai_ready(settings):
         raise RuntimeError(f"summaries need AI: {ai_not_ready_reason(settings)}")
-    tc_offset = tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     lines = []
     for i, p in enumerate(st["paras"]):
         t = para_text(st["words"], p).strip()
         if t:
-            lines.append(f"{i} | [{fmt_tc(p['start'] + tc_offset)}] {st['labels'].get(str(p['speaker']), 'Speaker')} | {t}")
+            lines.append(f"{i} | [{src_tc(st, p['start'], frames=False)}] {st['labels'].get(str(p['speaker']), 'Speaker')} | {t}")
     text = "\n".join(lines)[:400_000]
     system = "\n\n".join([
         "You are an associate producer logging an interview or conversation for a TV/documentary editor.",
@@ -1366,12 +1488,11 @@ def summary_view(st):
     sm = st.get("summary")
     if not sm:
         return None
-    tc_offset = tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     return {
         "summary": _named(sm["text"], st["labels"]),
         "topics": sm["topics"],
-        "soundbites": [{**b, "who": st["labels"].get(str(b["speaker"]), ""), "tc": fmt_tc(b["start"] + tc_offset, st["fps"]),
-                        "tc_out": fmt_tc(b["end"] + tc_offset, st["fps"])} for b in sm["soundbites"]],
+        "soundbites": [{**b, "who": st["labels"].get(str(b["speaker"]), ""), "tc": src_tc(st, b["start"]),
+                        "tc_out": src_tc(st, b["end"])} for b in sm["soundbites"]],
     }
 
 
@@ -1525,17 +1646,18 @@ def _para_rows(words, paras, texts):
             yield p, t
 
 
-def write_txt(path, media, words, paras, labels, tc_offset, fps, meta, texts=None):
+def write_txt(path, media, words, paras, labels, tcf, meta, texts=None):
+    """tcf(sec) -> source timecode string."""
     labels = shown_labels(labels)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"{media.name}\n")
         f.write(" · ".join(meta) + "\n\n")
         for p, t in _para_rows(words, paras, texts):
             who = labels.get(p["speaker"])
-            f.write(f"[{fmt_tc(p['start'] + tc_offset, fps)}]  {who.upper() + ':  ' if who else ''}{t}\n\n")
+            f.write(f"[{tcf(p['start'])}]  {who.upper() + ':  ' if who else ''}{t}\n\n")
 
 
-def write_docx(path, media, words, paras, labels, tc_offset, fps, meta, texts=None):
+def write_docx(path, media, words, paras, labels, tcf, meta, texts=None):
     try:
         from docx import Document
         from docx.shared import Pt, RGBColor
@@ -1552,7 +1674,7 @@ def write_docx(path, media, words, paras, labels, tc_offset, fps, meta, texts=No
     m.runs[0].font.size = Pt(9)
     for p, t in _para_rows(words, paras, texts):
         para = doc.add_paragraph()
-        r = para.add_run(fmt_tc(p["start"] + tc_offset, fps) + "   ")
+        r = para.add_run(tcf(p["start"]) + "   ")
         r.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
         r.font.size = Pt(9)
         who = labels.get(p["speaker"])
@@ -1674,6 +1796,7 @@ def translate_state(st, target, settings, names=None):
 def process(media, settings, opts=None):
     media = Path(media)
     t0 = time.time()
+    _STAGE.update(name=None, t=t0)
     CLIP_COST["usd"] = 0.0
     opts = opts or default_opts(settings)
     files = set(opts.get("files") or [])
@@ -1750,7 +1873,7 @@ def process(media, settings, opts=None):
             log(f"  speaker labels failed ({e}); continuing without them")
 
     progress("Transcribing", 0.55 if dialogue is not None else 0.35 if pre else 0.25)
-    log(f"  transcribing ({engine_name()}, {settings['model']})…")
+    log(f"  transcribing ({engine_name()})…")
     words, lang = transcribe_words(audio, settings, names, turns)
     if not words:
         log("  no speech found.")
@@ -1829,14 +1952,13 @@ def write_outputs(st, settings, captions=True):
     out = outputs_for(media, list(trs), st.get("out"))
     files = set((st.get("out") or {}).get("files") or ["srt", "docx", "txt", "summary"])  # older clips made everything
     labels = {int(k): v for k, v in st["labels"].items()}
-    tc_offset = tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     caps = st.get("caps") or build_captions([w for w in st["words"] if w["text"]], settings)
     if captions and "srt" in files:
         write_srt(out["srt"], caps)
     if "txt" in files:
-        write_txt(out["txt"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], state_meta(st))
+        write_txt(out["txt"], media, st["words"], st["paras"], labels, lambda s: src_tc(st, s), state_meta(st))
     if "docx" in files:
-        write_docx(out["docx"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], state_meta(st))
+        write_docx(out["docx"], media, st["words"], st["paras"], labels, lambda s: src_tc(st, s), state_meta(st))
     if st.get("summary"):
         write_summary(st, out, txt="txt" in files)
     # translations follow the same choices; if no caption or transcript file was picked, make captions + Word
@@ -1847,9 +1969,9 @@ def write_outputs(st, settings, captions=True):
             write_srt(out[f"srt_{code}"], [dict(c, lines=split_text_lines(t, maxc)) for c, t in zip(caps, tr["caps"])])
         meta = state_meta(st, tr)
         if "txt" in tr_files:
-            write_txt(out[f"txt_{code}"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], meta, texts=tr["paras"])
+            write_txt(out[f"txt_{code}"], media, st["words"], st["paras"], labels, lambda s: src_tc(st, s), meta, texts=tr["paras"])
         if "docx" in tr_files:
-            write_docx(out[f"docx_{code}"], media, st["words"], st["paras"], labels, tc_offset, st["fps"], meta, texts=tr["paras"])
+            write_docx(out[f"docx_{code}"], media, st["words"], st["paras"], labels, lambda s: src_tc(st, s), meta, texts=tr["paras"])
 
 
 # ---------------------------------------------------------------- saved state (for naming speakers later)
@@ -1900,14 +2022,13 @@ def load_state_for(path):
 # ---------------------------------------------------------------- naming speakers in Terminal
 def _samples(st, num, n=2, width=110):
     """The longest things this speaker said, with timecode, to jog your memory."""
-    tc_offset = tc_to_seconds(st["tc"], st["fps"]) if st["tc"] else 0.0
     ps = [p for p in st["paras"] if p["speaker"] == num]
     ps = sorted(ps, key=lambda p: -len(para_text(st["words"], p)))[:n]
     out = []
     for p in sorted(ps, key=lambda p: p["start"]):
         t = para_text(st["words"], p)
         t = t if len(t) <= width else t[: width - 1].rsplit(" ", 1)[0] + "…"
-        out.append(f"      [{fmt_tc(p['start'] + tc_offset, st['fps'])}] \"{t}\"")
+        out.append(f"      [{src_tc(st, p['start'])}] \"{t}\"")
     return out
 
 

@@ -63,6 +63,14 @@ The status line shows soundbite runtime and VO read time (about 150 words a minu
 
 The assistant uses whichever AI you chose in Settings. With Claude, it reads about 30,000 words of transcript per project, roughly 3 to 4 hours of interviews. On Sonnet, the first request on a full project costs up to about 15¢. Follow-ups within a few minutes cost much less, because Claude keeps the transcripts cached. Each reply shows its cost. With the free local model, it reads about 4,000 words (around 25 minutes of interview), so it suits short projects. When a project is bigger than the assistant can read, it tells you how much it saw.
 
+## Sequences and markers for Premiere and Resolve
+
+- **Sequence** (in a script's toolbar) cuts every checked soundbite into a sequence, in script order, at the transcript's word timings. VO lines leave a gap as long as the read, with the VO text as a marker. Headings, bites that weren't found, and generated-voice lines become markers too. Run **Check bites** first. In Premiere: **File → Import** the `.xml`. Resolve: **File → Import → Timeline**.
+- **More → Soundbite markers** / **Transcript markers** saves a sequence of the whole clip at its source timecode, with a marker on every soundbite (summary at the head) or every paragraph.
+- Settings: handles on each bite (default none) and VO gaps (default on).
+
+Timecode is drop-frame aware and correct at 23.976, 29.97 and 59.94.
+
 ## Cloned voices for pickup lines
 
 For the line that isn't there: a word that got stepped on, a sentence cut off, a line the person approved. Cloned voices use ElevenLabs and need a plan that includes voice cloning (Starter and up).

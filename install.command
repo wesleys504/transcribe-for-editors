@@ -127,7 +127,7 @@ chmod +x "$APP/Contents/MacOS/Transcribe"
 touch "$APP"
 ln -sfn "$APP" "$HOME/Desktop/Transcribe"   # Desktop shortcut
 
-say_step "Downloading the Whisper model (about 1.6 GB — this can take a few minutes)"
+say_step "Downloading the Whisper model (about 1.5 GB — this can take a few minutes)"
 "$PY" - <<'EOF'
 import platform, numpy as np
 audio = np.zeros(16000, dtype=np.float32)
@@ -136,7 +136,8 @@ if platform.machine() == "arm64":
     mlx_whisper.transcribe(audio, path_or_hf_repo="mlx-community/whisper-large-v3-turbo")
 else:
     from faster_whisper import WhisperModel
-    WhisperModel("large-v3-turbo", device="auto", compute_type="int8")
+    WhisperModel("distil-large-v3", device="auto", compute_type="int8")   # Intel's fast English model; others download on first use
+    WhisperModel("tiny", device="auto", compute_type="int8")              # quick language check
 print("Whisper model ready.")
 EOF
 

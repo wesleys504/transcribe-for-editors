@@ -194,13 +194,12 @@ def clip_labels(paths):
 
 
 def _tc_offset(st):
-    return T.tc_to_seconds(st["tc"], st["fps"]) if st.get("tc") else 0.0
+    return T.tc_offset(st)
 
 
 def clip_lines(st):
     """Transcript as sentence-sized lines with in/out timecodes and speaker names."""
     words, labels = st["words"], T.shown_labels({int(k): v for k, v in st["labels"].items()})
-    off, fps = _tc_offset(st), st.get("fps")
     lines = []
     for p in st["paras"]:
         idx = [i for i in p["w"] if words[i]["text"]]
@@ -211,8 +210,8 @@ def clip_lines(st):
                 text = " ".join(words[j]["text"].strip() for j in cur).strip()
                 if text:
                     lines.append({"in": words[cur[0]]["start"], "out": words[cur[-1]]["end"], "who": labels.get(p["speaker"], ""),
-                                  "text": text, "tin": T.fmt_tc(words[cur[0]]["start"] + off, fps),
-                                  "tout": T.fmt_tc(words[cur[-1]]["end"] + off, fps)})
+                                  "text": text, "tin": T.src_tc(st, words[cur[0]]["start"]),
+                                  "tout": T.src_tc(st, words[cur[-1]]["end"])})
                 cur = []
     return lines
 
@@ -455,11 +454,13 @@ BITE = re.compile(
 
 
 def _tc_secs(tc, fps):
-    parts = [int(x) for x in re.split(r"[:;.]", tc)]
-    if len(parts) == 3:
-        parts.append(0)
-    h, m, s, f = parts
-    return h * 3600 + m * 60 + s + (f / round(fps) if fps else 0)
+    """Real seconds for a typed timecode (drop-frame aware). HH:MM:SS counts as frame 0."""
+    if re.match(r"^\d{1,2}:\d{2}:\d{2}$", tc):
+        tc += ":00"
+    if fps:
+        return T.tc_to_seconds(tc.zfill(11), fps)
+    h, m, s, _ = [int(x) for x in re.split(r"[:;.]", tc)]
+    return h * 3600 + m * 60 + s
 
 
 def _clip_index(p):
@@ -537,7 +538,7 @@ def check(pid, body):
             continue
         a, b, ratio = found
         ws = entry["ws"]
-        tin, tout = T.fmt_tc(ws[a]["start"] + off, fps), T.fmt_tc(ws[b]["end"] + off, fps)
+        tin, tout = T.src_tc(st, ws[a]["start"]), T.src_tc(st, ws[b]["end"])
         real = " ".join(w["text"].strip() for w in ws[a:b + 1])
         r.update(fix_tin=tin, fix_tout=tout, secs=round(ws[b]["end"] - ws[a]["start"], 2),
                  path=entry["path"], start=ws[a]["start"], end=ws[b]["end"])
@@ -648,3 +649,78 @@ def export_docx(pid, sid, folder):
             doc.add_paragraph(line.strip())
     doc.save(path)
     return str(path)
+
+
+# ---------------------------------------------------------------- sequence export (FCP 7 XML for Premiere / Resolve)
+
+
+def export_xml(pid, sid, folder, results, handles=0, vo_gaps=True, fps=None):
+    """
+    The script as a sequence: every soundbite the check found in a transcript, cut end to end in script order,
+    at the transcript's word timings. VO lines leave a hole as long as the read (about 150 words a minute) when
+    vo_gaps is on. Headings, VO text, generated-voice lines and bites that couldn't be found become markers.
+    `results` are the soundbite/SYNTH checks for this body, in line order.
+    """
+    import nle
+    p = load(pid)
+    s = _script(p, sid)
+    by_line = {r["line"]: r for r in results}
+    items, markers, t = [], [], 0.0
+    used = skipped = 0
+    first = next((r for r in results if r.get("path") and r.get("status") in ("ok", "tc", "close")), None)
+    seq_fps = fps or (nle.media_info(first["path"])["fps"] if first else None) or nle.DEFAULT_FPS
+    first_st = T.load_state_for(first["path"]) if first else None
+    df = bool(first_st and T.tc_df(first_st.get("tc"), first_st.get("fps")))
+
+    def mark(name, comment="", dur=None):
+        markers.append({"at": t, "end": t + dur if dur else None, "name": name, "comment": comment})
+
+    for n, line in enumerate(s["body"].split("\n")):
+        r = by_line.get(n)
+        raw = line.strip()
+        if r and r.get("status") == "synth":
+            note = f"SYNTHETIC VOICE ({r['who'].upper()}), NOT RECORDED"
+            if r.get("file") and Path(r["file"]).exists():
+                secs = nle.media_info(r["file"])["secs"]
+                mark(note, r["quote"], secs)
+                items.append({"path": r["file"], "in": 0, "out": secs, "name": f"SYNTHETIC - {r['who']}"})
+                t += secs
+            else:
+                secs = max(1.0, len(r["quote"].split()) / 150 * 60)
+                mark(note + " - not generated yet", r["quote"], secs)
+                items.append({"gap": secs})
+                t += secs
+        elif r and r.get("path") and r.get("status") in ("ok", "tc", "close"):
+            st = T.load_state_for(r["path"])
+            m = BITE.match(line)
+            who = (m["who"] or "").strip() if m else ""
+            if r["status"] == "close":
+                mark("CHECK BITE", f"Words are close, not exact. Transcript says: “{r.get('fix_quote', '')}”")
+            items.append({"path": r["path"], "in": r["start"], "out": r["end"],
+                          "name": f"{r.get('clip_fix') or r['clip']}{' ' + who if who else ''}",
+                          "src_tc": nle.source_tc(st) if st else None})
+            total = round(nle.media_info(r["path"])["secs"] * seq_fps)   # same frame math as nle.sequence_xml
+            a = max(0, round(r["start"] * seq_fps) - handles)
+            b = min(total, round(r["end"] * seq_fps) + handles)
+            t += max(0, b - a) / seq_fps
+            used += 1
+        elif r:
+            mark("MISSING BITE", f"{r['clip']}: “{r['quote']}” ({r.get('note', '')})")
+            skipped += 1
+        elif raw.startswith("## "):
+            mark(raw[3:].strip())
+        elif raw.upper().startswith("VO:"):
+            text = raw[3:].strip()
+            secs = max(1.0, len(text.split()) / 150 * 60) if vo_gaps else None
+            mark("VO", text, secs)
+            if secs:
+                items.append({"gap": secs})
+                t += secs
+    if not used:
+        raise RuntimeError("No soundbites in this script matched a transcript. Run Check bites first.")
+    name = f"{p['name']} - {s['title']}"
+    start = (T.tc_to_frames("01:00:00;00" if df else "01:00:00:00", seq_fps), df)
+    xml = nle.sequence_xml(name, items, fps=seq_fps, start_tc=start, markers=markers, handles=handles)
+    path = nle.safe_path(folder, name, ".xml")
+    path.write_text(xml, encoding="utf-8")
+    return {"path": str(path), "bites": used, "skipped": skipped}
