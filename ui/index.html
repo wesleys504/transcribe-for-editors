@@ -7,17 +7,22 @@
 <!-- Transcribe, (c) 2026 TBD Media Post. PolyForm Noncommercial 1.0.0. -->
 <style>
   :root {
-    --bg: #1f2229;
-    --panel: #282c35;
-    --raised: #313641;
-    --line: #3b414e;
-    --text: #e9e7e2;
-    --muted: #959aa6;
-    --caption: #f2d45c;   /* subtitle yellow: the one accent */
+    /* Matches ClipCleaner (TBD Media's Runway app): near-black, purple accent. */
+    --bg: #0e1014;
+    --panel: #14181f;
+    --raised: #1b2029;
+    --line: #3e4653;
+    --text: #e9ecf0;
+    --muted: #8d94a0;
+    --caption: #8357de;   /* accent: ClipCleaner purple */
+    --accent-soft: #201834;   /* selected rows/cards */
+    --warn: #f2c14e;      /* timecodes off, close-but-not-exact, synthetic voice */
     --ok: #63c49a;
     --bad: #ec6d62;
-    --frame: #0d0f12;
-    --btn: #f2d45c;
+    --frame: #07090c;
+    --btn: #8357de;
+    --on-btn: #ffffff;
+    --accent-text: #c1abee;   /* accent as text on dark */
     --radius-s: 6px;
     --radius-l: 12px;
     color-scheme: dark;
@@ -25,7 +30,7 @@
   @media (prefers-color-scheme: light) {
     :root {
       --bg: #eef0f3; --panel: #ffffff; --raised: #f5f6f8; --line: #d9dde3;
-      --text: #1d2026; --muted: #69707c; --caption: #b88a00; --ok: #23875c; --bad: #c8453a; --frame: #15171b;
+      --text: #1d2026; --muted: #69707c; --caption: #6b3fcf; --accent-soft: #ece6fb; --warn: #a87400; --btn: #6b3fcf; --accent-text: #6b3fcf; --ok: #23875c; --bad: #c8453a; --frame: #15171b;
       color-scheme: light;
     }
   }
@@ -37,7 +42,7 @@
     border-radius: var(--radius-s); padding: 6px 12px; }
   button:hover { border-color: var(--muted); }
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--caption); outline-offset: 1px; }
-  button.primary { background: var(--btn); color: #1a1600; border-color: transparent; font-weight: 600; }
+  button.primary { background: var(--btn); color: var(--on-btn); border-color: transparent; font-weight: 600; }
   button.quiet { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 8px; }
   button.quiet:hover { color: var(--text); }
   input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
@@ -113,8 +118,8 @@
   .frame { background: var(--frame); border-radius: var(--radius-s); padding: 14px 14px 10px; }
   .frame .who { color: #9aa0ab; font-size: 12px; margin-bottom: 8px; }
   .cue { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
-  .cue .play { flex: none; width: 28px; height: 28px; border-radius: 50%; padding: 0; border: 1px solid #3a3f49; background: #1b1e24; color: #e9e7e2; }
-  .cue .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .cue .play { flex: none; width: 28px; height: 28px; border-radius: 50%; padding: 0; border: 1px solid var(--line); background: var(--raised); color: var(--text); }
+  .cue .play.on { background: var(--btn); color: var(--on-btn); border-color: transparent; }
   .cue .line { flex: 1; text-align: center; }
   .cue .line span { background: rgba(0,0,0,.75); color: #fff; padding: 1px 6px; line-height: 1.75;
     box-decoration-break: clone; -webkit-box-decoration-break: clone; font-size: 14px; font-weight: 500; }
@@ -144,7 +149,7 @@
   .bite q { font-size: 14px; line-height: 1.55; quotes: "\201C" "\201D"; }
   .bite .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .bite .play { width: 28px; height: 28px; border-radius: 50%; padding: 0; }
-  .bite .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .bite .play.on { background: var(--btn); color: var(--on-btn); border-color: transparent; }
   .sheet h3 { font-size: 13px; font-weight: 650; margin: 26px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
   .sheet h3:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
   .choice { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; }
@@ -190,7 +195,7 @@
   .clip-row:hover { background: var(--raised); }
   .clip-row .t { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .clip-row .k { color: var(--muted); font-size: 11px; grid-column: 1; }
-  .clip-row .k.wait { color: var(--caption); }
+  .clip-row .k.wait { color: var(--warn); }
   .clip-row button { grid-row: 1 / span 2; grid-column: 2; padding: 2px 6px; opacity: 0; }
   .clip-row:hover button, .clip-row button:focus-visible { opacity: 1; }
   .ws-side textarea { min-height: 90px; font-size: 12px; }
@@ -209,11 +214,11 @@
   .checks .top strong { flex: 1; }
   .chk { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; }
   .chk .ic { font-weight: 700; }
-  .chk.s-ok .ic { color: var(--ok); } .chk.s-tc .ic, .chk.s-close .ic { color: var(--caption); } .chk.s-missing .ic, .chk.s-clip .ic { color: var(--bad); }
+  .chk.s-ok .ic { color: var(--ok); } .chk.s-tc .ic, .chk.s-close .ic { color: var(--warn); } .chk.s-missing .ic, .chk.s-clip .ic { color: var(--bad); }
   .chk .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chk .n { color: var(--muted); font-size: 12px; }
   .chk .play { width: 26px; height: 26px; border-radius: 50%; padding: 0; font-size: 11px; }
-  .chk .play.on { background: var(--btn); color: #1a1600; border-color: transparent; }
+  .chk .play.on { background: var(--btn); color: var(--on-btn); border-color: transparent; }
   .ws-empty { display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
   .ws-empty .buttons { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
   .chat { border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; background: var(--panel); }
@@ -232,7 +237,7 @@
   .starters p { color: var(--muted); margin: 0 0 4px; }
   .starters button { text-align: left; white-space: normal; }
   .chat-in { border-top: 1px solid var(--line); padding: 10px 12px 12px; }
-  .chat-in .sel { color: var(--caption); font-size: 11px; margin-bottom: 6px; display: none; }
+  .chat-in .sel { color: var(--accent-text); font-size: 11px; margin-bottom: 6px; display: none; }
   .chat-in .sel.on { display: block; }
   .chat-in textarea { min-height: 64px; max-height: 30vh; resize: none; }
   .chat-in .row2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
@@ -248,11 +253,11 @@
   .voice-row .k.cloned { color: var(--ok); }
   .voice-row .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; }
   .voice-row .acts button { padding: 2px 8px; font-size: 12px; }
-  .chk.s-synth .ic { color: var(--caption); }
+  .chk.s-synth .ic { color: var(--warn); }
   .chk.s-synth .q { font-style: italic; }
   .chk .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
   .chk .acts button { padding: 3px 9px; font-size: 12px; }
-  .synth-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #1a1600; background: var(--caption);
+  .synth-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #1a1600; background: var(--warn);
     border-radius: 3px; padding: 0 5px; margin-right: 6px; font-style: normal; }
   .consent { background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 12px 14px; margin: 12px 0; }
   .logbox { white-space: pre-wrap; font: 12px/1.6 "SF Mono", ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line);
@@ -326,6 +331,7 @@
         <select id="edType" aria-label="Script type"></select>
         <button id="edCheck" title="Check every soundbite against the transcripts">Check bites</button>
         <button id="edExport" title="Save as a Word document">Export</button>
+        <button id="edXml" title="Cut the checked bites into a sequence for Premiere or Resolve (FCP XML)">Sequence</button>
         <span class="more"><button class="quiet" data-more aria-label="More">More</button><span class="menu">
           <button id="edCopy">Copy script</button><button id="edDelete">Delete script</button></span></span>
       </div>
@@ -418,6 +424,19 @@ VO: Narration line.
     <div><label for="transcribeCleaned">Transcribe from the cleaned audio</label><div class="hint">Helps with noisy recordings.</div></div>
     <input id="transcribeCleaned" type="checkbox" />
   </div>
+  <div class="field switch">
+    <div><label for="doneSound">Play a sound when everything's done</label></div>
+    <input id="doneSound" type="checkbox" />
+  </div>
+  <div class="field">
+    <label for="xmlHandles">Sequence export: handles on each bite</label>
+    <select id="xmlHandles"><option value="0">None (cut on the words)</option><option value="4">4 frames</option><option value="8">8 frames</option><option value="12">12 frames</option><option value="24">1 second</option></select>
+    <div class="hint">Extra frames before and after each bite, so you can roll the edit.</div>
+  </div>
+  <div class="field switch">
+    <div><label for="xmlVoGaps">Sequence export: leave room for VO lines</label><div class="hint">A gap as long as the read, about 150 words a minute, with the VO text as a marker.</div></div>
+    <input id="xmlVoGaps" type="checkbox" />
+  </div>
   <div class="field">
     <label for="elKey">ElevenLabs API key</label>
     <div class="keyrow"><input id="elKey" type="password" autocomplete="off" placeholder="Paste key" /><button data-savekey="elevenlabs" data-input="elKey">Save</button></div>
@@ -471,9 +490,11 @@ VO: Narration line.
   <div class="field">
     <label for="model">Whisper model</label>
     <select id="model">
-      <option value="large-v3-turbo">Large v3 Turbo (recommended)</option>
+      <option value="auto">Automatic: best for this Mac (recommended)</option>
+      <option value="large-v3-turbo">Large v3 Turbo (accurate)</option>
       <option value="large-v3">Large v3 (slower, a little more accurate)</option>
       <option value="medium">Medium (faster)</option>
+      <option value="distil-large-v3" data-intel>Distil Large v3 (fast, English only, Intel Macs)</option>
     </select>
     <div class="hint" id="engineHint"></div>
   </div>
@@ -635,6 +656,8 @@ function clipActions({ path, outputs, speakers, named, hasSummary }) {
   h += `<span class="more"><button class="quiet" data-more aria-label="More actions">More</button><span class="menu">
       <button data-translate="${esc(path)}">Translate…</button>
       <button data-summarize="${esc(path)}">${hasSummary ? "Rewrite summary" : "Write summary"}</button>
+      ${hasSummary ? `<button data-markers="${esc(path)}" data-kind="soundbites">Soundbite markers (XML)</button>` : ""}
+      <button data-markers="${esc(path)}" data-kind="paragraphs">Transcript markers (XML)</button>
       <button data-reveal="${esc(outputs[0] || path)}">Show in Finder</button></span></span>`;
   return h;
 }
@@ -692,6 +715,9 @@ function loadSettingsForm() {
   $("#cleanup").checked = !!s.claude_cleanup;
   $("#askOutputs").checked = s.ask_outputs !== false;
   $("#transcribeCleaned").checked = s.transcribe_cleaned !== false;
+  $("#doneSound").checked = s.done_sound !== false;
+  $("#xmlHandles").value = String(s.xml_handles || 0);
+  $("#xmlVoGaps").checked = s.xml_vo_gaps !== false;
   $("#cleanService").innerHTML = Object.entries(S.cleanupServices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
   $("#cleanService").value = s.audio_cleanup || "local";
   $("#localModel").innerHTML = Object.entries(S.ollama.choices).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
@@ -701,10 +727,13 @@ function loadSettingsForm() {
   $("#speakers").value = String(s.speakers || "auto");
   $("#language").value = s.language || "auto";
   $("#lineLen").value = String(s.max_chars_per_line || 42);
-  $("#model").value = s.model || "large-v3-turbo";
+  $("#model").value = s.model || "auto";
   $("#claudeModel").value = s.claude_model || "claude-sonnet-5-5";
   $("#names").value = S.names;
-  $("#engineHint").textContent = S.engine === "mlx" ? "Runs on your Mac's GPU (Apple Silicon)." : "Runs on your Mac's processor.";
+  document.querySelectorAll("#model [data-intel]").forEach((o) => (o.hidden = S.engine === "mlx"));
+  $("#engineHint").textContent = S.engine === "mlx"
+    ? "Runs on your Mac's GPU (Apple Silicon). Automatic uses Large v3 Turbo."
+    : "Intel Mac: runs on the processor, so it's slower. Automatic uses a fast English model for English clips and Large v3 Turbo for other languages.";
   renderKeyState();
   settingsLoaded = true;
 }
@@ -822,6 +851,12 @@ document.addEventListener("click", async (e) => {
     else if (t.dataset.translate) { closeMenus(); openTranslate(t.dataset.translate); }
     else if (t.dataset.summarize) { closeMenus(); await api("/api/summarize", { paths: [t.dataset.summarize] }); toast("Claude is writing the summary"); showQueue(); }
     else if (t.dataset.summary) openSummary(t.dataset.summary);
+    else if (t.dataset.markers) {
+      closeMenus();
+      const r = await api("/api/markers", { path: t.dataset.markers, kind: t.dataset.kind });
+      toast(`Saved ${r.markers} markers. In Premiere: File → Import the XML.`, 4000);
+      api("/api/open", { path: r.path, reveal: true });
+    }
     else if (t.dataset.retry) { await api("/api/retry", { id: t.dataset.retry }); refresh(); }
     else if (t.dataset.tab) {
       tab = t.dataset.tab;
@@ -946,6 +981,9 @@ $("#claudeModel").onchange = (e) => saveSetting("claude_model", e.target.value, 
 $("#model").onchange = (e) => saveSetting("model", e.target.value, "Saved. A new model downloads the first time it's used.");
 $("#askOutputs").onchange = (e) => saveSetting("ask_outputs", e.target.checked, e.target.checked ? "I'll ask what to create" : "New clips use your saved choices");
 $("#transcribeCleaned").onchange = (e) => saveSetting("transcribe_cleaned", e.target.checked);
+$("#doneSound").onchange = (e) => saveSetting("done_sound", e.target.checked);
+$("#xmlHandles").onchange = (e) => saveSetting("xml_handles", Number(e.target.value));
+$("#xmlVoGaps").onchange = (e) => saveSetting("xml_vo_gaps", e.target.checked);
 $("#cleanService").onchange = (e) => { saveSetting("audio_cleanup", e.target.value); S.settings.audio_cleanup = e.target.value; renderServiceKeys(); };
 $("#localModel").onchange = async (e) => { await saveSetting("local_model", e.target.value); await api("/api/ollama/refresh", {}); refresh(); };
 $("#pullModel").onclick = async () => { try { await api("/api/ollama/pull", { model: $("#localModel").value }); toast("Downloading the model. This can take a while."); refresh(); } catch (e) { toast(e.message, 4000); } };
@@ -1278,6 +1316,16 @@ $("#edExport").onclick = async () => {
   await flushSave();
   try { const r = await api("/api/script/export", { project: WS.id, id: WS.script.id }); if (r.path) { toast("Saved " + base(r.path)); api("/api/open", { path: r.path, reveal: true }); } }
   catch (e) { toast(e.message, 4000); }
+};
+$("#edXml").onclick = async () => {
+  await flushSave();
+  try {
+    const r = await api("/api/script/export_xml", { project: WS.id, id: WS.script.id });
+    if (r.path) {
+      toast(`Saved ${r.bites} bites${r.skipped ? `, ${r.skipped} not found (marked)` : ""}. In Premiere: File → Import the XML.`, 5000);
+      api("/api/open", { path: r.path, reveal: true });
+    }
+  } catch (e) { toast(e.message, 4000); }
 };
 $("#edCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#edBody").value); toast("Script copied"); } catch { toast("Couldn't copy"); } };
 $("#edDelete").onclick = async () => {
